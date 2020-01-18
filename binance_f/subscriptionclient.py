@@ -1,3 +1,4 @@
+import typing
 import urllib.parse
 
 from binance_f.constant.system import WebSocketDefine
@@ -14,7 +15,7 @@ from binance_f.base.printobject import *
 
 class ConnectionsKlass:
     def __init__(self):
-        self._data = {}
+        self._data: typing.Dict[str, WebsocketConnection] = {}
 
     def append(self, connection: WebsocketConnection):
         key = connection.request.name
@@ -26,7 +27,7 @@ class ConnectionsKlass:
     def __iter__(self):
         return iter(self._data.values())
 
-    def __getitem__(self, key):
+    def __getitem__(self, key) -> WebsocketConnection:
         return self._data[key]
 
 
