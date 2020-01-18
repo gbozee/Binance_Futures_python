@@ -23,17 +23,19 @@ print("Result: ", result)
 logger = logging.getLogger("binance-client")
 logger.setLevel(level=logging.INFO)
 handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+)
 logger.addHandler(handler)
 
 sub_client = SubscriptionClient(api_key=g_api_key, secret_key=g_secret_key)
 
 
-def callback(data_type: 'SubscribeMessageType', event: 'any'):
+def callback(data_type: "SubscribeMessageType", event: "any"):
     if data_type == SubscribeMessageType.RESPONSE:
         print("Event ID: ", event)
-    elif  data_type == SubscribeMessageType.PAYLOAD:
-        if(event.eventType == "ACCOUNT_UPDATE"):
+    elif data_type == SubscribeMessageType.PAYLOAD:
+        if event.eventType == "ACCOUNT_UPDATE":
             print("Event Type: ", event.eventType)
             print("Event time: ", event.eventTime)
             print("Transaction time: ", event.transactionTime)
@@ -43,7 +45,7 @@ def callback(data_type: 'SubscribeMessageType', event: 'any'):
             print("=== Positions ===")
             PrintMix.print_data(event.positions)
             print("================")
-        elif(event.eventType == "ORDER_TRADE_UPDATE"):
+        elif event.eventType == "ORDER_TRADE_UPDATE":
             print("Event Type: ", event.eventType)
             print("Event time: ", event.eventTime)
             print("Transaction Time: ", event.transactionTime)
@@ -71,7 +73,7 @@ def callback(data_type: 'SubscribeMessageType', event: 'any'):
             print("Is this trade the maker side?: ", event.isMarkerSide)
             print("Is this reduce only: ", event.isReduceOnly)
             print("stop price working type: ", event.workingType)
-        elif(event.eventType == "listenKeyExpired"):
+        elif event.eventType == "listenKeyExpired":
             print("Event: ", event.eventType)
             print("Event time: ", event.eventTime)
             print("CAUTION: YOUR LISTEN-KEY HAS BEEN EXPIRED!!!")
@@ -82,7 +84,8 @@ def callback(data_type: 'SubscribeMessageType', event: 'any'):
     print()
 
 
-def error(e: 'BinanceApiException'):
+def error(e: "BinanceApiException"):
     print(e.error_code + e.error_message)
+
 
 sub_client.subscribe_user_data_event(listen_key, callback, error)

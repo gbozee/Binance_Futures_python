@@ -1,0 +1,5 @@
+venv
+startup.sh
+.vscode
+*__pycache__
+*.egg-info

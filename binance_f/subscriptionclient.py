@@ -11,8 +11,26 @@ from binance_f.model.constant import *
 # For develop
 from binance_f.base.printobject import *
 
-class SubscriptionClient(object):
 
+class ConnectionsKlass:
+    def __init__(self):
+        self._data = {}
+
+    def append(self, connection: WebsocketConnection):
+        key = connection.request.name
+        self._data[key] = connection
+
+    def clear(self):
+        self._data = {}
+
+    def __iter__(self):
+        return iter(self._data.values())
+
+    def __getitem__(self, key):
+        return self._data[key]
+
+
+class SubscriptionClient(object):
     def __init__(self, **kwargs):
         """
         Create the subscription client to subscribe the update from server.
@@ -39,7 +57,8 @@ class SubscriptionClient(object):
         self.__api_key = api_key
         self.__secret_key = secret_key
         self.websocket_request_impl = WebsocketRequestImpl(self.__api_key)
-        self.connections = list()
+        self.connections = ConnectionsKlass()
+        # self.connections = list()
         self.uri = WebSocketDefine.Uri
         is_auto_connect = True
         receive_limit_ms = 60000
@@ -52,19 +71,33 @@ class SubscriptionClient(object):
             receive_limit_ms = kwargs["receive_limit_ms"]
         if "connection_delay_failure" in kwargs:
             connection_delay_failure = kwargs["connection_delay_failure"]
-        self.__watch_dog = WebSocketWatchDog(is_auto_connect, receive_limit_ms, connection_delay_failure)
+        self.__watch_dog = WebSocketWatchDog(
+            is_auto_connect, receive_limit_ms, connection_delay_failure
+        )
+
+    def thread_safe_shutdown(self, key: str):
+        connection: WebsocketConnection = self.connections[key]
+        try:
+            connection.thread_safe()
+        except Exception:
+            connection.shutdown_gracefully()
 
     def __create_connection(self, request):
-        connection = WebsocketConnection(self.__api_key, self.__secret_key, self.uri, self.__watch_dog, request)
+        connection = WebsocketConnection(
+            self.__api_key, self.__secret_key, self.uri, self.__watch_dog, request
+        )
         self.connections.append(connection)
         connection.connect()
+        self.thread_safe_shutdown(request.name)
 
     def unsubscribe_all(self):
         for conn in self.connections:
             conn.close()
         self.connections.clear()
 
-    def subscribe_aggregate_trade_event(self, symbol: 'str', callback, error_handler=None):
+    def subscribe_aggregate_trade_event(
+        self, symbol: "str", callback, error_handler=None
+    ):
         """
         Aggregate Trade Streams
 
@@ -72,10 +105,13 @@ class SubscriptionClient(object):
 
         Stream Name: <symbol>@aggTrade
         """
-        request = self.websocket_request_impl.subscribe_aggregate_trade_event(symbol, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_aggregate_trade_event(
+            symbol, callback, error_handler
+        )
+        request.name = "subscribe_aggregate_trade_event"
         self.__create_connection(request)
 
-    def subscribe_mark_price_event(self, symbol: 'str', callback, error_handler=None):
+    def subscribe_mark_price_event(self, symbol: "str", callback, error_handler=None):
         """
         Mark Price Stream
 
@@ -83,11 +119,19 @@ class SubscriptionClient(object):
 
         Stream Name: <symbol>@markPrice
         """
-        request = self.websocket_request_impl.subscribe_mark_price_event(symbol, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_mark_price_event(
+            symbol, callback, error_handler
+        )
+        request.name = "subscribe_mark_price_event"
         self.__create_connection(request)
-    
-    def subscribe_candlestick_event(self, symbol: 'str', interval: 'CandlestickInterval', callback,
-                                    error_handler=None):
+
+    def subscribe_candlestick_event(
+        self,
+        symbol: "str",
+        interval: "CandlestickInterval",
+        callback,
+        error_handler=None,
+    ):
         """
         Kline/Candlestick Streams
 
@@ -95,10 +139,15 @@ class SubscriptionClient(object):
 
         Stream Name: <symbol>@kline_<interval>
         """
-        request = self.websocket_request_impl.subscribe_candlestick_event(symbol, interval, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_candlestick_event(
+            symbol, interval, callback, error_handler
+        )
+        request.name = "subscribe_candlestick_event"
         self.__create_connection(request)
-           
-    def subscribe_symbol_miniticker_event(self, symbol: 'str', callback, error_handler=None):
+
+    def subscribe_symbol_miniticker_event(
+        self, symbol: "str", callback, error_handler=None
+    ):
         """
         Individual Symbol Mini Ticker Stream
 
@@ -107,9 +156,12 @@ class SubscriptionClient(object):
 
         Stream Name: <symbol>@miniTicker
         """
-        request = self.websocket_request_impl.subscribe_symbol_miniticker_event(symbol, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_symbol_miniticker_event(
+            symbol, callback, error_handler
+        )
+        request.name = "subscribe_symbol_miniticker_event"
         self.__create_connection(request)
-  
+
     def subscribe_all_miniticker_event(self, callback, error_handler=None):
         """
         All Market Mini Tickers Stream
@@ -120,10 +172,15 @@ class SubscriptionClient(object):
 
         Stream Name: !miniTicker@arr
         """
-        request = self.websocket_request_impl.subscribe_all_miniticker_event(callback, error_handler)
+        request = self.websocket_request_impl.subscribe_all_miniticker_event(
+            callback, error_handler
+        )
+        request.name = "subscribe_all_miniticker_event"
         self.__create_connection(request)
 
-    def subscribe_symbol_ticker_event(self, symbol: 'str', callback, error_handler=None):
+    def subscribe_symbol_ticker_event(
+        self, symbol: "str", callback, error_handler=None
+    ):
         """
         Individual Symbol Ticker Streams
 
@@ -132,9 +189,12 @@ class SubscriptionClient(object):
 
         Stream Name: <symbol>@ticker
         """
-        request = self.websocket_request_impl.subscribe_symbol_ticker_event(symbol, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_symbol_ticker_event(
+            symbol, callback, error_handler
+        )
+        request.name = "subscribe_symbol_ticker_event"
         self.__create_connection(request)
-      
+
     def subscribe_all_ticker_event(self, callback, error_handler=None):
         """
         All Market Tickers Stream
@@ -144,10 +204,15 @@ class SubscriptionClient(object):
 
         Stream Name: !ticker@arr
         """
-        request = self.websocket_request_impl.subscribe_all_ticker_event(callback, error_handler)
+        request = self.websocket_request_impl.subscribe_all_ticker_event(
+            callback, error_handler
+        )
+        request.name = "subscribe_all_ticker_event"
         self.__create_connection(request)
 
-    def subscribe_symbol_bookticker_event(self, symbol: 'str', callback, error_handler=None):
+    def subscribe_symbol_bookticker_event(
+        self, symbol: "str", callback, error_handler=None
+    ):
         """
         Individual Symbol Book Ticker Streams
 
@@ -155,9 +220,12 @@ class SubscriptionClient(object):
 
         Stream Name: <symbol>@bookTicker
         """
-        request = self.websocket_request_impl.subscribe_symbol_bookticker_event(symbol, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_symbol_bookticker_event(
+            symbol, callback, error_handler
+        )
+        request.name = "subscribe_symbol_bookticker_event"
         self.__create_connection(request)
-    
+
     def subscribe_all_bookticker_event(self, callback, error_handler=None):
         """
         All Book Tickers Stream
@@ -166,10 +234,15 @@ class SubscriptionClient(object):
 
         Stream Name: !bookTicker
         """
-        request = self.websocket_request_impl.subscribe_all_bookticker_event(callback, error_handler)
+        request = self.websocket_request_impl.subscribe_all_bookticker_event(
+            callback, error_handler
+        )
+        request.name = "subscribe_all_bookticker_event"
         self.__create_connection(request)
 
-    def subscribe_symbol_liquidation_event(self, symbol: 'str', callback, error_handler=None):
+    def subscribe_symbol_liquidation_event(
+        self, symbol: "str", callback, error_handler=None
+    ):
         """
         Liquidation Order Streams
 
@@ -177,7 +250,10 @@ class SubscriptionClient(object):
 
         Stream Name:  <symbol>@forceOrder
         """
-        request = self.websocket_request_impl.subscribe_symbol_liquidation_event(symbol, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_symbol_liquidation_event(
+            symbol, callback, error_handler
+        )
+        request.name = "subscribe_symbol_liquidation_event"
         self.__create_connection(request)
 
     def subscribe_all_liquidation_event(self, callback, error_handler=None):
@@ -188,10 +264,20 @@ class SubscriptionClient(object):
 
         Stream Name: !forceOrder@arr
         """
-        request = self.websocket_request_impl.subscribe_all_liquidation_event(callback, error_handler)
+        request = self.websocket_request_impl.subscribe_all_liquidation_event(
+            callback, error_handler
+        )
+        request.name = "subscribe_all_liquidation_event"
         self.__create_connection(request)
-             
-    def subscribe_book_depth_event(self, symbol: 'str', limit: 'int', callback, error_handler=None, update_time: 'UpdateTime' = UpdateTime.INVALID):
+
+    def subscribe_book_depth_event(
+        self,
+        symbol: "str",
+        limit: "int",
+        callback,
+        error_handler=None,
+        update_time: "UpdateTime" = UpdateTime.INVALID,
+    ):
         """
         Partial Book Depth Streams
 
@@ -200,10 +286,19 @@ class SubscriptionClient(object):
         Stream Names: <symbol>@depth<levels> OR <symbol>@depth<levels>@100ms.
         """
         print(update_time)
-        request = self.websocket_request_impl.subscribe_book_depth_event(symbol, limit, update_time, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_book_depth_event(
+            symbol, limit, update_time, callback, error_handler
+        )
+        request.name = "subscribe_book_depth_event"
         self.__create_connection(request)
 
-    def subscribe_diff_depth_event(self, symbol: 'str', callback, error_handler=None, update_time: 'UpdateTime' = UpdateTime.INVALID):
+    def subscribe_diff_depth_event(
+        self,
+        symbol: "str",
+        callback,
+        error_handler=None,
+        update_time: "UpdateTime" = UpdateTime.INVALID,
+    ):
         """
         Diff. Depth Stream
 
@@ -211,12 +306,19 @@ class SubscriptionClient(object):
 
         Stream Name: <symbol>@depth OR <symbol>@depth@100ms
         """
-        request = self.websocket_request_impl.subscribe_diff_depth_event(symbol, update_time, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_diff_depth_event(
+            symbol, update_time, callback, error_handler
+        )
+        request.name = "subscribe_diff_depth_event"
         self.__create_connection(request)
 
-    def subscribe_user_data_event(self, listenKey: 'str', callback, error_handler=None):
+    def subscribe_user_data_event(self, listenKey: "str", callback, error_handler=None):
         """
         User Data Streams
         """
-        request = self.websocket_request_impl.subscribe_user_data_event(listenKey, callback, error_handler)
+        request = self.websocket_request_impl.subscribe_user_data_event(
+            listenKey, callback, error_handler
+        )
+        request.name = "subscribe_user_data_event"
         self.__create_connection(request)
+
