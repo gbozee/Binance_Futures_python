@@ -38,6 +38,7 @@ class TradeDirection:
 
 class OrderType:
     LIMIT = "LIMIT"
+    STOP = "STOP"
     MARKET = "MARKET"
     STOP_LOSS = "STOP_LOSS"
     STOP_LOSS_LIMIT = "STOP_LOSS_LIMIT"

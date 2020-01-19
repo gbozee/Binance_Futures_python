@@ -76,20 +76,20 @@ class SubscriptionClient(object):
             is_auto_connect, receive_limit_ms, connection_delay_failure
         )
 
-    def thread_safe_shutdown(self, key: str):
+    def thread_safe_shutdown(self, key: str, callback=None):
         connection: WebsocketConnection = self.connections[key]
         try:
-            connection.thread_safe()
+            connection.thread_safe(callback=callback)
         except Exception:
             connection.shutdown_gracefully()
 
-    def __create_connection(self, request):
+    def __create_connection(self, request, running_callback=None):
         connection = WebsocketConnection(
             self.__api_key, self.__secret_key, self.uri, self.__watch_dog, request
         )
         self.connections.append(connection)
         connection.connect()
-        self.thread_safe_shutdown(request.name)
+        self.thread_safe_shutdown(request.name, callback=running_callback)
 
     def unsubscribe_all(self):
         for conn in self.connections:
@@ -112,7 +112,9 @@ class SubscriptionClient(object):
         request.name = "subscribe_aggregate_trade_event"
         self.__create_connection(request)
 
-    def subscribe_mark_price_event(self, symbol: "str", callback, error_handler=None):
+    def subscribe_mark_price_event(
+        self, symbol: "str", callback, error_handler=None, running_callback=None
+    ):
         """
         Mark Price Stream
 
@@ -124,7 +126,7 @@ class SubscriptionClient(object):
             symbol, callback, error_handler
         )
         request.name = "subscribe_mark_price_event"
-        self.__create_connection(request)
+        self.__create_connection(request, running_callback=running_callback)
 
     def subscribe_candlestick_event(
         self,
@@ -313,7 +315,9 @@ class SubscriptionClient(object):
         request.name = "subscribe_diff_depth_event"
         self.__create_connection(request)
 
-    def subscribe_user_data_event(self, listenKey: "str", callback, error_handler=None):
+    def subscribe_user_data_event(
+        self, listenKey: "str", callback, error_handler=None, running_callback=None
+    ):
         """
         User Data Streams
         """
@@ -321,5 +325,5 @@ class SubscriptionClient(object):
             listenKey, callback, error_handler
         )
         request.name = "subscribe_user_data_event"
-        self.__create_connection(request)
+        self.__create_connection(request, running_callback=running_callback)
 

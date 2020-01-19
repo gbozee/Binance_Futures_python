@@ -18,3 +18,13 @@ class MarkPriceEvent:
         result.fundingRate = json_data.get_float("r")
         result.nextFundingTime = json_data.get_int("T")
         return result
+
+    def as_json(self):
+        return {
+            'type': self.eventType,
+            'time': self.eventTime,
+            'symbol': self.symbol,
+            'markPrice': self.markPrice,
+            'fundingRate': self.fundingRate,
+            'nextFundingTime': self.nextFundingTime
+        }

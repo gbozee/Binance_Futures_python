@@ -1,5 +1,4 @@
 class Position:
-
     def __init__(self):
         self.entryPrice = 0.0
         self.leverage = 0.0
@@ -11,6 +10,10 @@ class Position:
         self.unrealizedProfit = 0.0
         self.marginType = ""
         self.isolatedMargin = ""
+
+    @property
+    def kind(self) -> str:
+        return "long" if self.entryPrice > self.liquidationPrice else "short"
 
     @staticmethod
     def json_parse(json_data):

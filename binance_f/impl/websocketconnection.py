@@ -141,12 +141,14 @@ class WebsocketConnection:
 
     def on_error(self, error_message):
         if self.request.error_handler is not None:
+            print(self.request.error_handler)
             print("error")
             exception = BinanceApiException(
                 BinanceApiException.SUBSCRIPTION_ERROR, error_message
             )
             self.request.error_handler(exception)
         self.logger.error("[Sub][" + str(self.id) + "] " + str(error_message))
+        self.shutdown_gracefully()
 
     def on_failure(self, error):
         print("on_failure")
@@ -236,10 +238,13 @@ class WebsocketConnection:
         self.__watch_dog.graceful_shutdown()
         print("Closed scheduler")
 
-    def thread_safe(self):
+    def thread_safe(self, callback=None):
         try:
             while True:
-                time.sleep(0.1)
+                if callback:
+                    callback()
+                else:
+                    time.sleep(0.1)
         except KeyboardInterrupt as e:
             self.close()
             self.shutdown_gracefully()

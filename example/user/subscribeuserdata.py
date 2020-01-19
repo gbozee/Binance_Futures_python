@@ -1,4 +1,5 @@
 import logging
+import time
 from binance_f import RequestClient
 from binance_f import SubscriptionClient
 from binance_f.constant.test import *
@@ -46,33 +47,35 @@ def callback(data_type: "SubscribeMessageType", event: "any"):
             PrintMix.print_data(event.positions)
             print("================")
         elif event.eventType == "ORDER_TRADE_UPDATE":
-            print("Event Type: ", event.eventType)
-            print("Event time: ", event.eventTime)
-            print("Transaction Time: ", event.transactionTime)
-            print("Symbol: ", event.symbol)
-            print("Client Order Id: ", event.clientOrderId)
-            print("Side: ", event.side)
-            print("Order Type: ", event.type)
-            print("Time in Force: ", event.timeInForce)
-            print("Original Quantity: ", event.origQty)
-            print("Price: ", event.price)
-            print("Average Price: ", event.avgPrice)
-            print("Stop Price: ", event.stopPrice)
-            print("Execution Type: ", event.executionType)
-            print("Order Status: ", event.orderStatus)
-            print("Order Id: ", event.orderId)
-            print("Order Last Filled Quantity: ", event.lastFilledQty)
-            print("Order Filled Accumulated Quantity: ", event.cumulativeFilledQty)
-            print("Last Filled Price: ", event.lastFilledPrice)
-            print("Commission Asset: ", event.commissionAsset)
-            print("Commissions: ", event.commissionAmount)
-            print("Order Trade Time: ", event.orderTradeTime)
-            print("Trade Id: ", event.tradeID)
-            print("Bids Notional: ", event.bidsNotional)
-            print("Ask Notional: ", event.asksNotional)
-            print("Is this trade the maker side?: ", event.isMarkerSide)
-            print("Is this reduce only: ", event.isReduceOnly)
-            print("stop price working type: ", event.workingType)
+            if event.orderStatus == "FILLED":
+                print(event.__dict__)
+                print("Event Type: ", event.eventType)
+                print("Event time: ", event.eventTime)
+                print("Transaction Time: ", event.transactionTime)
+                print("Symbol: ", event.symbol)
+                print("Client Order Id: ", event.clientOrderId)
+                print("Side: ", event.side)
+                print("Order Type: ", event.type)
+                print("Time in Force: ", event.timeInForce)
+                print("Original Quantity: ", event.origQty)
+                print("Price: ", event.price)
+                print("Average Price: ", event.avgPrice)
+                print("Stop Price: ", event.stopPrice)
+                print("Execution Type: ", event.executionType)
+                print("Order Status: ", event.orderStatus)
+                print("Order Id: ", event.orderId)
+                print("Order Last Filled Quantity: ", event.lastFilledQty)
+                print("Order Filled Accumulated Quantity: ", event.cumulativeFilledQty)
+                print("Last Filled Price: ", event.lastFilledPrice)
+                print("Commission Asset: ", event.commissionAsset)
+                print("Commissions: ", event.commissionAmount)
+                print("Order Trade Time: ", event.orderTradeTime)
+                print("Trade Id: ", event.tradeID)
+                print("Bids Notional: ", event.bidsNotional)
+                print("Ask Notional: ", event.asksNotional)
+                print("Is this trade the maker side?: ", event.isMarkerSide)
+                print("Is this reduce only: ", event.isReduceOnly)
+                print("stop price working type: ", event.workingType)
         elif event.eventType == "listenKeyExpired":
             print("Event: ", event.eventType)
             print("Event time: ", event.eventTime)
@@ -88,4 +91,13 @@ def error(e: "BinanceApiException"):
     print(e.error_code + e.error_message)
 
 
-sub_client.subscribe_user_data_event(listen_key, callback, error)
+def long_callback():
+    print("Update listen_key after 50 minutes")
+    time.sleep(60 * 50)
+    request_client.keep_user_data_stream()
+
+
+sub_client.subscribe_user_data_event(
+    listen_key, callback, error, running_callback=long_callback
+)
+

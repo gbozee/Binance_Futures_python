@@ -19,6 +19,7 @@ class Order:
         self.avgPrice = 0.0
         self.origType = ""
 
+
     @staticmethod
     def json_parse(json_data):
         result = Order()

@@ -1,8 +1,19 @@
-from binance_f import RequestClient
+from timeit import default_timer
+from datetime import timedelta
+import asyncio
+# from binance_f import RequestClient
+
+from binance_f import AsyncRequestClient as RequestClient
 from binance_f.constant.test import *
 from binance_f.base.printobject import *
 from binance_f.model.constant import *
 
 request_client = RequestClient(api_key=g_api_key, secret_key=g_secret_key)
-result = request_client.get_balance()
-PrintMix.print_data(result)
+start = default_timer()
+# result = request_client.get_balance()
+result = asyncio.run(request_client.get_balance())
+end = default_timer()
+# PrintMix.print_data(result)
+
+print(timedelta(seconds=end - start))
+

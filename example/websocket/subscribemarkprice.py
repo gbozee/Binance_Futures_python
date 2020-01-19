@@ -9,24 +9,28 @@ from binance_f.base.printobject import *
 logger = logging.getLogger("binance-futures")
 logger.setLevel(level=logging.INFO)
 handler = logging.StreamHandler()
-handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+handler.setFormatter(
+    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+)
 logger.addHandler(handler)
 
 sub_client = SubscriptionClient(api_key=g_api_key, secret_key=g_secret_key)
 
 
-def callback(data_type: 'SubscribeMessageType', event: 'any'):
+def callback(data_type: "SubscribeMessageType", event: "any"):
     if data_type == SubscribeMessageType.RESPONSE:
         print("Event ID: ", event)
-    elif  data_type == SubscribeMessageType.PAYLOAD:
-        PrintBasic.print_obj(event)
-        sub_client.unsubscribe_all()
+    elif data_type == SubscribeMessageType.PAYLOAD:
+        print(event.as_json())
+        # PrintBasic.print_obj(event)
+        # sub_client.unsubscribe_all()
     else:
         print("Unknown Data:")
     print()
 
 
-def error(e: 'BinanceApiException'):
+def error(e: "BinanceApiException"):
     print(e.error_code + e.error_message)
+
 
 sub_client.subscribe_mark_price_event("btcusdt", callback, error)

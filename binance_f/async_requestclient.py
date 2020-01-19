@@ -1,6 +1,6 @@
 from binance_f.constant.system import RestApiDefine
 from binance_f.impl.restapirequestimpl import RestApiRequestImpl
-from binance_f.impl.restapiinvoker import call_sync
+from binance_f.impl.restapiinvoker import call_async as call_sync
 from binance_f.model.constant import *
 
 
@@ -30,10 +30,10 @@ class RequestClient(object):
         except Exception:
             pass
 
-    def call_sync(self,func):
-        return call_sync(func,debug=self.debug)
+    async def call_sync(self, coroutine):
+        return await call_sync(coroutine, debug=self.debug)
 
-    def get_servertime(self) -> any:
+    async def get_servertime(self) -> any:
         """
         Check Server Time
 
@@ -41,9 +41,9 @@ class RequestClient(object):
 
         Test connectivity to the Rest API and get the current server time.
         """
-        return self.call_sync(self.request_impl.get_servertime())
+        return await self.call_sync(self.request_impl.get_servertime())
 
-    def get_exchange_information(self) -> any:
+    async def get_exchange_information(self) -> any:
         """
         Exchange Information (MARKET_DATA)
 
@@ -51,9 +51,9 @@ class RequestClient(object):
 
         Current exchange trading rules and symbol information
         """
-        return self.call_sync(self.request_impl.get_exchange_information())
+        return await self.call_sync(self.request_impl.get_exchange_information())
 
-    def get_order_book(self, symbol: "str", limit: "int" = None) -> any:
+    async def get_order_book(self, symbol: "str", limit: "int" = None) -> any:
         """
         Order Book (MARKET_DATA)
 
@@ -61,9 +61,9 @@ class RequestClient(object):
 
         Adjusted based on the limit:
         """
-        return self.call_sync(self.request_impl.get_order_book(symbol, limit))
+        return await self.call_sync(self.request_impl.get_order_book(symbol, limit))
 
-    def get_recent_trades_list(self, symbol: "str", limit: "int" = None) -> any:
+    async def get_recent_trades_list(self, symbol: "str", limit: "int" = None) -> any:
         """
         Recent Trades List (MARKET_DATA)
 
@@ -71,9 +71,11 @@ class RequestClient(object):
 
         Get recent trades (up to last 500).
         """
-        return self.call_sync(self.request_impl.get_recent_trades_list(symbol, limit))
+        return await self.call_sync(
+            self.request_impl.get_recent_trades_list(symbol, limit)
+        )
 
-    def get_old_trade_lookup(
+    async def get_old_trade_lookup(
         self, symbol: "str", limit: "int" = None, fromId: "long" = None
     ) -> any:
         """
@@ -83,9 +85,11 @@ class RequestClient(object):
 
         Get older market historical trades.
         """
-        return self.call_sync(self.request_impl.get_old_trade_lookup(symbol, limit, fromId))
+        return await self.call_sync(
+            self.request_impl.get_old_trade_lookup(symbol, limit, fromId)
+        )
 
-    def get_aggregate_trades_list(
+    async def get_aggregate_trades_list(
         self,
         symbol: "str",
         fromId: "long" = None,
@@ -101,13 +105,13 @@ class RequestClient(object):
         Get compressed, aggregate trades. Trades that fill at the time, from the same order, 
         with the same price will have the quantity aggregated.
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_aggregate_trades_list(
                 symbol, fromId, startTime, endTime, limit
             )
         )
 
-    def get_candlestick_data(
+    async def get_candlestick_data(
         self,
         symbol: "str",
         interval: "CandlestickInterval",
@@ -122,13 +126,13 @@ class RequestClient(object):
 
         Kline/candlestick bars for a symbol. Klines are uniquely identified by their open time.
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_candlestick_data(
                 symbol, interval, startTime, endTime, limit
             )
         )
 
-    def get_mark_price(self, symbol: "str") -> any:
+    async def get_mark_price(self, symbol: "str") -> any:
         """
         Mark Price (MARKET_DATA)
 
@@ -136,9 +140,9 @@ class RequestClient(object):
 
         Mark Price and Funding Rate
         """
-        return self.call_sync(self.request_impl.get_mark_price(symbol))
+        return await self.call_sync(self.request_impl.get_mark_price(symbol))
 
-    def get_funding_rate(
+    async def get_funding_rate(
         self,
         symbol: "str",
         startTime: "long" = None,
@@ -150,11 +154,11 @@ class RequestClient(object):
 
         GET /fapi/v1/fundingRate
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_funding_rate(symbol, startTime, endTime, limit)
         )
 
-    def get_ticker_price_change_statistics(self, symbol: "str" = None) -> any:
+    async def get_ticker_price_change_statistics(self, symbol: "str" = None) -> any:
         """
         24hr Ticker Price Change Statistics (MARKET_DATA)
 
@@ -163,9 +167,11 @@ class RequestClient(object):
         24 hour rolling window price change statistics.
         Careful when accessing this with no symbol.
         """
-        return self.call_sync(self.request_impl.get_ticker_price_change_statistics(symbol))
+        return await self.call_sync(
+            self.request_impl.get_ticker_price_change_statistics(symbol)
+        )
 
-    def get_symbol_price_ticker(self, symbol: "str" = None) -> any:
+    async def get_symbol_price_ticker(self, symbol: "str" = None) -> any:
         """
         Symbol Price Ticker (MARKET_DATA)
 
@@ -173,9 +179,9 @@ class RequestClient(object):
 
         Latest price for a symbol or symbols.
         """
-        return self.call_sync(self.request_impl.get_symbol_price_ticker(symbol))
+        return await self.call_sync(self.request_impl.get_symbol_price_ticker(symbol))
 
-    def get_symbol_orderbook_ticker(self, symbol: "str" = None) -> any:
+    async def get_symbol_orderbook_ticker(self, symbol: "str" = None) -> any:
         """
         Symbol Order Book Ticker (MARKET_DATA)
 
@@ -183,9 +189,11 @@ class RequestClient(object):
 
         Best price/qty on the order book for a symbol or symbols.
         """
-        return self.call_sync(self.request_impl.get_symbol_orderbook_ticker(symbol))
+        return await self.call_sync(
+            self.request_impl.get_symbol_orderbook_ticker(symbol)
+        )
 
-    def get_liquidation_orders(
+    async def get_liquidation_orders(
         self,
         symbol: "str" = None,
         startTime: "long" = None,
@@ -197,11 +205,11 @@ class RequestClient(object):
 
         GET /fapi/v1/allForceOrders
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_liquidation_orders(symbol, startTime, endTime, limit)
         )
 
-    def get_open_interest(self, symbol: "str") -> any:
+    async def get_open_interest(self, symbol: "str") -> any:
         """
         Symbol Open Interest (MARKET_DATA)
 
@@ -209,9 +217,9 @@ class RequestClient(object):
 
         Get present open interest of a specific symbol.
         """
-        return self.call_sync(self.request_impl.get_open_interest(symbol))
+        return await self.call_sync(self.request_impl.get_open_interest(symbol))
 
-    def post_order(
+    async def post_order(
         self,
         symbol: "str",
         side: "OrderSide",
@@ -231,7 +239,7 @@ class RequestClient(object):
 
         Send in a new order.
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.post_order(
                 symbol,
                 side,
@@ -246,7 +254,7 @@ class RequestClient(object):
             )
         )
 
-    def get_order(
+    async def get_order(
         self, symbol: "str", orderId: "long" = None, origClientOrderId: "str" = None
     ) -> any:
         """
@@ -256,11 +264,11 @@ class RequestClient(object):
 
         Check an order's status.
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_order(symbol, orderId, origClientOrderId)
         )
 
-    def cancel_order(
+    async def cancel_order(
         self, symbol: "str", orderId: "long" = None, origClientOrderId: "str" = None
     ) -> any:
         """
@@ -270,19 +278,19 @@ class RequestClient(object):
 
         Cancel an active order.
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.cancel_order(symbol, orderId, origClientOrderId)
         )
 
-    def cancel_all_orders(self, symbol: "str") -> any:
+    async def cancel_all_orders(self, symbol: "str") -> any:
         """
         Cancel All Open Orders (TRADE)
 
         DELETE /fapi/v1/allOpenOrders (HMAC SHA256)
         """
-        return self.call_sync(self.request_impl.cancel_all_orders(symbol))
+        return await self.call_sync(self.request_impl.cancel_all_orders(symbol))
 
-    def cancel_list_orders(
+    async def cancel_list_orders(
         self,
         symbol: "str",
         orderIdList: "list" = None,
@@ -293,13 +301,13 @@ class RequestClient(object):
 
         DELETE /fapi/v1/batchOrders (HMAC SHA256)
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.cancel_list_orders(
                 symbol, orderIdList, origClientOrderIdList
             )
         )
 
-    def get_open_orders(self, symbol: "str" = None) -> any:
+    async def get_open_orders(self, symbol: "str" = None) -> any:
         """
         Current Open Orders (USER_DATA)
 
@@ -307,9 +315,9 @@ class RequestClient(object):
 
         Get all open orders on a symbol. Careful when accessing this with no symbol.
         """
-        return self.call_sync(self.request_impl.get_open_orders(symbol))
+        return await self.call_sync(self.request_impl.get_open_orders(symbol))
 
-    def get_all_orders(
+    async def get_all_orders(
         self,
         symbol: "str",
         orderId: "long" = None,
@@ -324,19 +332,19 @@ class RequestClient(object):
 
         Get all account orders; active, canceled, or filled.
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_all_orders(symbol, orderId, startTime, endTime, limit)
         )
 
-    def get_balance(self) -> any:
+    async def get_balance(self) -> any:
         """
         Future Account Balance (USER_DATA)
 
         Get /fapi/v1/balance (HMAC SHA256)
         """
-        return self.call_sync(self.request_impl.get_balance())
+        return await self.call_sync(self.request_impl.get_balance())
 
-    def get_account_information(self) -> any:
+    async def get_account_information(self) -> any:
         """
         Account Information (USER_DATA)
 
@@ -344,9 +352,9 @@ class RequestClient(object):
 
         Get current account information.
         """
-        return self.call_sync(self.request_impl.get_account_information())
+        return await self.call_sync(self.request_impl.get_account_information())
 
-    def change_initial_leverage(self, symbol: "str", leverage: "int") -> any:
+    async def change_initial_leverage(self, symbol: "str", leverage: "int") -> any:
         """
         Change Initial Leverage (TRADE)
 
@@ -354,17 +362,23 @@ class RequestClient(object):
 
         Change user's initial leverage of specific symbol market.
         """
-        return self.call_sync(self.request_impl.change_initial_leverage(symbol, leverage))
+        return await self.call_sync(
+            self.request_impl.change_initial_leverage(symbol, leverage)
+        )
 
-    def change_margin_type(self, symbol: "str", marginType: "FuturesMarginType") -> any:
+    async def change_margin_type(
+        self, symbol: "str", marginType: "FuturesMarginType"
+    ) -> any:
         """
         Change Margin Type (TRADE)
 
         POST /fapi/v1/marginType (HMAC SHA256)
         """
-        return self.call_sync(self.request_impl.change_margin_type(symbol, marginType))
+        return await self.call_sync(
+            self.request_impl.change_margin_type(symbol, marginType)
+        )
 
-    def change_position_margin(
+    async def change_position_margin(
         self, symbol: "str", amount: "float", type: "int"
     ) -> any:
         """
@@ -372,9 +386,11 @@ class RequestClient(object):
 
         POST /fapi/v1/positionMargin (HMAC SHA256)
         """
-        return self.call_sync(self.request_impl.change_position_margin(symbol, amount, type))
+        return await self.call_sync(
+            self.request_impl.change_position_margin(symbol, amount, type)
+        )
 
-    def get_position_margin_change_history(
+    async def get_position_margin_change_history(
         self,
         symbol: "str",
         type: "int" = None,
@@ -387,21 +403,21 @@ class RequestClient(object):
 
         GET /fapi/v1/positionMargin/history (HMAC SHA256)
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_position_margin_change_history(
                 symbol, type, startTime, endTime, limit
             )
         )
 
-    def get_position(self) -> any:
+    async def get_position(self) -> any:
         """
         Position Information (USER_DATA)
 
         GET /fapi/v1/positionRisk (HMAC SHA256) Get current account information.
         """
-        return self.call_sync(self.request_impl.get_position())
+        return await self.call_sync(self.request_impl.get_position())
 
-    def get_account_trades(
+    async def get_account_trades(
         self,
         symbol: "str",
         startTime: "long" = None,
@@ -416,13 +432,13 @@ class RequestClient(object):
 
         Get trades for a specific account and symbol.
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_account_trades(
                 symbol, startTime, endTime, fromId, limit
             )
         )
 
-    def get_income_history(
+    async def get_income_history(
         self,
         symbol: "str" = None,
         incomeType: "IncomeType" = IncomeType.INVALID,
@@ -435,13 +451,13 @@ class RequestClient(object):
 
         GET /fapi/v1/income (HMAC SHA256)
         """
-        return self.call_sync(
+        return await self.call_sync(
             self.request_impl.get_income_history(
                 symbol, incomeType, startTime, endTime, limit
             )
         )
 
-    def start_user_data_stream(self) -> any:
+    async def start_user_data_stream(self) -> any:
         """
         Start User Data Stream (USER_STREAM)
 
@@ -451,9 +467,9 @@ class RequestClient(object):
         If the account has an active listenKey, 
         that listenKey will be returned and its validity will be extended for 60 minutes.
         """
-        return self.call_sync(self.request_impl.start_user_data_stream())
+        return await self.call_sync(self.request_impl.start_user_data_stream())
 
-    def keep_user_data_stream(self) -> any:
+    async def keep_user_data_stream(self) -> any:
         """
         Keepalive User Data Stream (USER_STREAM)
 
@@ -462,9 +478,9 @@ class RequestClient(object):
         Keepalive a user data stream to prevent a time out. User data streams will close after 60 minutes. 
         It's recommended to send a ping about every 60 minutes.
         """
-        return self.call_sync(self.request_impl.keep_user_data_stream())
+        return await self.call_sync(self.request_impl.keep_user_data_stream())
 
-    def close_user_data_stream(self) -> any:
+    async def close_user_data_stream(self) -> any:
         """
         Close User Data Stream (USER_STREAM)
 
@@ -472,4 +488,4 @@ class RequestClient(object):
 
         Close out a user data stream.
         """
-        return self.call_sync(self.request_impl.close_user_data_stream())
+        return await self.call_sync(self.request_impl.close_user_data_stream())
