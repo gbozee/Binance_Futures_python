@@ -6,6 +6,7 @@ from binance_f.impl.websocketrequestimpl import WebsocketRequestImpl
 from binance_f.impl.websocketconnection import WebsocketConnection
 from binance_f.impl.websocketwatchdog import WebSocketWatchDog
 from binance_f.impl.restapirequestimpl import RestApiRequestImpl
+from binance_f.exception.binanceapiexception import BinanceApiException
 from binance_f.model import *
 from binance_f.model.constant import *
 
@@ -326,4 +327,84 @@ class SubscriptionClient(object):
         )
         request.name = "subscribe_user_data_event"
         self.__create_connection(request, running_callback=running_callback)
+
+
+class HelperMixin:
+    async def _limit(self, price, quantity, kind="sell") -> order.Order:
+        buy_symbol = getattr(self, "buy_symbol")
+        places = getattr(self, "places")
+        price_places = getattr(self, "price_places")
+        client = getattr(self, "client")
+        kwargs = dict(
+            symbol=buy_symbol,
+            side=constant.OrderSide.SELL,
+            ordertype=constant.OrderType.LIMIT,
+            quantity=format(places % quantity),
+            price=format(price_places % price),
+            timeInForce=constant.TimeInForce.FOK,
+        )
+        if kind == "buy":
+            kwargs["side"] = constant.OrderSide.BUY
+        return await client.post_order(**kwargs)
+
+    async def _stop_limit(
+        self, quantity, price, orderType, kind="long", reduceOnly=None
+    ) -> order.Order:
+        reduceOnly = None
+        buy_symbol = getattr(self, "buy_symbol")
+        places = getattr(self, "places")
+        price_places = getattr(self, "price_places")
+        client = getattr(self, "client")
+        kwargs = {
+            "symbol": buy_symbol,
+            "ordertype": orderType,
+            "timeInForce": "GTC",
+            "quantity": format(places % quantity),
+            "price": format(price_places % price),
+            "side": constant.OrderSide.SELL,
+            "stopPrice": format(price_places % (price + 1)),
+            "reduceOnly": reduceOnly,
+            "timeInForce": constant.TimeInForce.FOK
+            # "workingType": constant.WorkingType.MARK_PRICE if kind=="long" else constant.WorkingType.CONTRACT_PRICE,
+        }
+        if kind == "short":
+            kwargs["ordertype"] = orderType
+            kwargs["side"] = constant.OrderSide.BUY
+            kwargs["stopPrice"] = format(price_places % (price - 1))
+        return await client.post_order(**kwargs)
+
+    async def get_price(self) -> typing.Optional[float]:
+        mark_price = getattr(self, "mark_price")
+        buy_symbol = getattr(self, "buy_symbol")
+        client = getattr(self, "client")
+        if mark_price:
+            result = await client.get_mark_price(symbol=buy_symbol)
+            return result.markPrice
+        result = await client.get_symbol_price_ticker()
+        result = [x.price for x in result if x.symbol == buy_symbol]
+        if result:
+            return result[0]
+        return None
+
+    async def cancel_all_orders(self):
+        buy_symbol = getattr(self, "buy_symbol")
+        client = getattr(self, "client")
+        try:
+            await client.cancel_all_orders(buy_symbol)
+        except BinanceApiException as e:
+            pass
+
+    async def create_limit_buy(self, price, quantity) -> order.Order:
+        return await self._limit(price, quantity, kind="buy")
+
+    async def create_limit_sell(self, price, quantity) -> order.Order:
+        return await self._limit(price, quantity, kind="sell")
+
+    async def create_stop_loss(self, price, kind, quantity=None):
+        """
+        when creating stop loss, the sell price is the price used for short position
+        and the buy price is the price used for long position"""
+        budget = getattr(self, "budget")
+        _v = quantity or budget
+        return await self._stop_limit(_v, price, constant.OrderType.STOP, kind=kind)
 
