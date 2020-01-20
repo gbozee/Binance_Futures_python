@@ -351,7 +351,6 @@ class HelperMixin:
     async def _stop_limit(
         self, quantity, price, orderType, kind="long", reduceOnly=None
     ) -> order.Order:
-        reduceOnly = None
         buy_symbol = getattr(self, "buy_symbol")
         places = getattr(self, "places")
         price_places = getattr(self, "price_places")
@@ -401,11 +400,13 @@ class HelperMixin:
     async def create_limit_sell(self, price, quantity) -> order.Order:
         return await self._limit(price, quantity, kind="sell")
 
-    async def create_stop_loss(self, price, kind, quantity=None):
+    async def create_stop_loss(self, price, kind, quantity=None, reduceOnly=None):
         """
         when creating stop loss, the sell price is the price used for short position
         and the buy price is the price used for long position"""
         budget = getattr(self, "budget")
         _v = quantity or budget
-        return await self._stop_limit(_v, price, constant.OrderType.STOP, kind=kind)
+        return await self._stop_limit(
+            _v, price, constant.OrderType.STOP, kind=kind, reduceOnly=reduceOnly
+        )
 
