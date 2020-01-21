@@ -349,7 +349,7 @@ class HelperMixin:
         return await client.post_order(**kwargs)
 
     async def _stop_limit(
-        self, quantity, price, orderType, kind="long", reduceOnly=None
+        self, quantity, price, orderType, kind="long", reduceOnly=None,timeInForce=constant.TimeInForce.GTC
     ) -> order.Order:
         buy_symbol = getattr(self, "buy_symbol")
         places = getattr(self, "places")
@@ -364,7 +364,7 @@ class HelperMixin:
             "side": constant.OrderSide.SELL,
             "stopPrice": format(price_places % (price + 1)),
             "reduceOnly": reduceOnly,
-            "timeInForce": constant.TimeInForce.FOK
+            "timeInForce": timeInForce,
             # "workingType": constant.WorkingType.MARK_PRICE if kind=="long" else constant.WorkingType.CONTRACT_PRICE,
         }
         if kind == "short":
