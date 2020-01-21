@@ -342,7 +342,7 @@ class HelperMixin:
             ordertype=constant.OrderType.LIMIT,
             quantity=format(places % quantity),
             price=format(price_places % price),
-            timeInForce=constant.TimeInForce.FOK,
+            timeInForce=constant.TimeInForce.GTC,
         )
         if kind == "buy":
             kwargs["side"] = constant.OrderSide.BUY
