@@ -35,6 +35,7 @@ class Position:
         self.symbol = ""
         self.unrealizedProfit = 0.0
         self.isolated = False
+        self.leverage = 0.0
 
     @staticmethod
     def json_parse(json_data):
@@ -46,6 +47,7 @@ class Position:
         result.symbol = json_data.get_string("symbol")
         result.unrealizedProfit = json_data.get_float("unrealizedProfit")
         result.isolated = json_data.get_boolean("isolated")
+        result.leverage = json_data.get_float('leverage')
         return result
 
 

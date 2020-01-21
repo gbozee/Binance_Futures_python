@@ -349,7 +349,13 @@ class HelperMixin:
         return await client.post_order(**kwargs)
 
     async def _stop_limit(
-        self, quantity, price, orderType, kind="long", reduceOnly=None,timeInForce=constant.TimeInForce.GTC
+        self,
+        quantity,
+        price,
+        orderType,
+        kind="long",
+        reduceOnly=None,
+        timeInForce=constant.TimeInForce.GTC,
     ) -> order.Order:
         buy_symbol = getattr(self, "buy_symbol")
         places = getattr(self, "places")
@@ -410,3 +416,43 @@ class HelperMixin:
             _v, price, constant.OrderType.STOP, kind=kind, reduceOnly=reduceOnly
         )
 
+    async def get_leverage(self, entry=False) -> float:
+        client = getattr(self, "client")
+        buy_symbol = getattr(self, "buy_symbol")
+        result = await client.get_position()
+        data = [x for x in result if x.symbol == buy_symbol]
+        if data:
+            if entry:
+                return data[0].leverage, data[0].entryPrice
+            return data[0].leverage
+
+    async def determine_price_info(
+        self, percent, entry=None, quantity=None, leverage=None
+    ):
+        budget = getattr(self, "budget")
+        q = quantity or budget
+        print(q)
+        l = leverage
+        e = entry
+        if not entry:
+            _, e = await self.get_leverage(True)
+        if not leverage:
+            l, _ = await self.get_leverage(True)
+        return determine_price(percent, e, l, quantity=q)
+
+
+def determine_price(percent, entry, leverage, quantity=1):
+    #
+    # (result-entry)*quantity = pnl
+    # position = pnl/percent
+    dollar_value = entry / leverage
+    position = dollar_value * quantity
+    difference = (position * percent) / quantity
+    positive = difference + entry
+    negative = entry - difference
+    return {
+        "bull": positive,
+        "bear": negative,
+        "position": position,
+        "net-loss": position * percent,
+    }
