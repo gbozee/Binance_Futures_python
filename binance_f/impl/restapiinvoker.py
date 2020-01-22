@@ -50,7 +50,7 @@ def call_sync(request, debug=True):
 
 
 async def call_async(request: RestApiRequest, debug=True):
-    async with httpx.AsyncClient(base_url=request.host) as client:
+    async with httpx.AsyncClient(base_url=request.host,timeout=20) as client:
         response = None
         if request.method == "GET":
             response = await client.get(request.url, headers=request.header)
