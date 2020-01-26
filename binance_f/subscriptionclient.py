@@ -433,9 +433,12 @@ class HelperMixin:
     async def update_position_margin(self, amount):
         client = getattr(self, "client")
         buy_symbol = getattr(self, "buy_symbol")
-        await client.change_position_margin(
-            symbol=buy_symbol.upper(), amount=amount, type=1
-        )
+        try:
+            await client.change_position_margin(
+                symbol=buy_symbol.upper(), amount=amount, type=1
+            )
+        except Exception as e:
+            print(e)
 
     async def update_position(self):
         position = await self._get_position()
@@ -476,18 +479,7 @@ class HelperMixin:
             quantity=quantity,
             kind=kind,
         )
-        position = await self._get_position
-        if position:
-            initial_margin = await self.determine_initial_margin()
-            if (
-                position.isolatedMargin + abs(position.unrealizedProfit)
-            ) < initial_margin:
-                difference = (
-                    initial_margin
-                    - position.isolatedMargin
-                    + abs(position.unrealizedProfit)
-                )
-                await self.update_position_margin(difference)
+        position = await self._get_position()
         await self.cancel_all_orders()
         await asyncio.gather(
             *[self.create_limit_buy(x["price"], x["quantity"]) for x in trades["buys"]]
@@ -498,6 +490,18 @@ class HelperMixin:
                 for x in trades["sells"]
             ]
         )
+        if position:
+            initial_margin = await self.determine_initial_margin()
+            if (
+                position.isolatedMargin + abs(position.unrealizedProfit)
+            ) < initial_margin:
+                difference = (
+                    initial_margin
+                    - position.isolatedMargin
+                    + abs(position.unrealizedProfit)
+                )
+
+                await self.update_position_margin(difference)
 
     async def place_bulk_orders(
         # self, price_difference=50, quantity=0.5, percentProfit=100, currentPrice=None
