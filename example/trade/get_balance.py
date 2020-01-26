@@ -12,8 +12,9 @@ request_client = RequestClient(api_key=g_api_key, secret_key=g_secret_key)
 start = default_timer()
 # result = request_client.get_balance()
 result = asyncio.run(request_client.get_balance())
+import ipdb; ipdb.set_trace()
 end = default_timer()
-# PrintMix.print_data(result)
+PrintMix.print_data(result)
 
 print(timedelta(seconds=end - start))
 

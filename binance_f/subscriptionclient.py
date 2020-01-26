@@ -1,18 +1,17 @@
+import asyncio
 import typing
 import urllib.parse
 
-from binance_f.constant.system import WebSocketDefine
-from binance_f.impl.websocketrequestimpl import WebsocketRequestImpl
-from binance_f.impl.websocketconnection import WebsocketConnection
-from binance_f.impl.websocketwatchdog import WebSocketWatchDog
-from binance_f.impl.restapirequestimpl import RestApiRequestImpl
-from binance_f.exception.binanceapiexception import BinanceApiException
-from binance_f.model import constant, order, position
-from binance_f.model import *
-from binance_f.model.constant import *
-
-# For develop
 from binance_f.base.printobject import *
+from binance_f.constant.system import WebSocketDefine
+from binance_f.exception.binanceapiexception import BinanceApiException
+from binance_f.impl.restapirequestimpl import RestApiRequestImpl
+from binance_f.impl.websocketconnection import WebsocketConnection
+from binance_f.impl.websocketrequestimpl import WebsocketRequestImpl
+from binance_f.impl.websocketwatchdog import WebSocketWatchDog
+from binance_f.model import *
+from binance_f.model import constant, order, position
+from binance_f.model.constant import *
 
 
 class ConnectionsKlass:
@@ -426,6 +425,277 @@ class HelperMixin:
                 return data[0].leverage, data[0].entryPrice
             return data[0].leverage
 
+    async def get_balance(self):
+        client = getattr(self, "client")
+        balances = await client.get_balance()
+        return {x.asset: x.balance for x in balances}
+
+    async def update_position_margin(self, amount):
+        client = getattr(self, "client")
+        buy_symbol = getattr(self, "buy_symbol")
+        await client.change_position_margin(
+            symbol=buy_symbol.upper(), amount=amount, type=1
+        )
+
+    async def update_position(self):
+        position = await self._get_position()
+        if position.entryPrice:
+            currentPrice = position.entryPrice
+            quantity = abs(position.positionAmt)
+            kind = position.kind
+        else:
+            quantity = getattr(self, "quantity")
+            get_price = getattr(self, "get_price")
+            currentPrice = await get_price()
+            kind = "short"
+        return await self.create_bulk_trades(
+            entry_price=currentPrice,
+            leverage=position.leverage,
+            quantity=quantity,
+            kind=kind,
+        )
+
+    async def create_bulk_trades(
+        self,
+        take_profit_interval=4,
+        entry_price=None,
+        leverage=None,
+        quantity=None,
+        kind=None,
+        # price_difference=50, quantity=0.5
+    ):
+        get_price = getattr(self, "get_price")
+        take_profit_p = getattr(self, "take_profit_p")
+        currentPrice = await get_price()
+        trades = await self.place_bulk_orders(
+            # price_difference, quantity, take_profit_p * 100, currentPrice
+            currentPrice=currentPrice,
+            take_profit_interval=take_profit_interval,
+            entry_price=entry_price,
+            leverage=leverage,
+            quantity=quantity,
+            kind=kind,
+        )
+        position = await self._get_position
+        if position:
+            initial_margin = await self.determine_initial_margin()
+            if (
+                position.isolatedMargin + abs(position.unrealizedProfit)
+            ) < initial_margin:
+                difference = (
+                    initial_margin
+                    - position.isolatedMargin
+                    + abs(position.unrealizedProfit)
+                )
+                await self.update_position_margin(difference)
+        await self.cancel_all_orders()
+        await asyncio.gather(
+            *[self.create_limit_buy(x["price"], x["quantity"]) for x in trades["buys"]]
+        )
+        await asyncio.gather(
+            *[
+                self.create_limit_sell(x["price"], x["quantity"])
+                for x in trades["sells"]
+            ]
+        )
+
+    async def place_bulk_orders(
+        # self, price_difference=50, quantity=0.5, percentProfit=100, currentPrice=None
+        self,
+        entry_price=None,
+        leverage=None,
+        quantity=None,
+        take_profit_interval=4,
+        kind=None,
+        currentPrice=None,
+    ):
+        position = getattr(self, "position")
+        get_position = getattr(self, "get_position")
+        take_profit_p = getattr(self, "take_profit_p")
+        maximum_quantity = getattr(self, "maxiumum_quantity", 5)
+        _kind = kind
+        _leverage = leverage
+        _entry_price = entry_price
+        _quantity = quantity
+        if not all([_kind, _leverage, _entry_price, _quantity]):
+            if not position:
+                position = await get_position()
+                _entry_price = position.entryPrice
+                _kind = position.kind
+                _quantity = abs(position.positionAmt)
+                _leverage = position.leverage
+        result = determine_profit_qty_and_price(
+            take_profit_p,
+            _entry_price,
+            _leverage,
+            _quantity,
+            take_profit_interval,
+            maximum_quantity,
+            _kind,
+        )
+        # import pdb; pdb.set_trace()
+        # prices = await self.get_exit_price(
+        #     abs(position.positionAmt),
+        #     percentProfit,
+        #     position.entryPrice,
+        #     position.leverage,
+        # )
+        # if position.kind == "long":
+        #     exitPrice = prices["bull"] - position.entryPrice
+        # else:
+        #     exitPrice = position.entryPrice - prices["bear"]
+        # result = trade_generator(
+        #     position.entryPrice,
+        #     abs(position.positionAmt),
+        #     maximumQuantity=maximum_quantity,
+        #     quantity=quantity,
+        #     entryDifference=exitPrice,
+        #     kind=position.kind,
+        # )
+        if currentPrice:
+            if _kind == "long":
+                return {
+                    "buys": [x for x in result["buys"] if x["price"] < currentPrice],
+                    "sells": [x for x in result["buys"] if x["price"] > currentPrice],
+                }
+            return {
+                "buys": [x for x in result["buys"] if x["price"] < currentPrice],
+                "sells": [x for x in result["sells"] if x["price"] > currentPrice],
+            }
+        return result
+
+    async def get_exit_price(
+        self, quantity, percentage, entry_price=None, leverage=None
+    ):
+        _leverage = leverage
+        _entry_price = entry_price
+        if not _leverage:
+            position = getattr(self, "position")
+            if not position:
+                get_position = getattr(self, "get_position")
+                position = await get_position()
+                _entry_price = position.entryPrice
+            _leverage = position.leverage
+        _position = determine_price(percentage / 100, _entry_price, _leverage, quantity)
+        return _position
+        # margin_amount = quantity * _entry_price / leverage
+        # return margin_amount * _leverage / quantity
+
+    async def get_profit_quantity(self, exit_price, pnl_quantity=None, leverage=None):
+        profit_amount = pnl_quantity
+        if not profit_amount:
+            profit_amount = getattr(self, "profit_amount")
+        _leverage = leverage
+        if not _leverage:
+            position = getattr(self, "position")
+            if not position:
+                get_position = getattr(self, "get_position")
+                position = await get_position()
+            _leverage = position.leverage
+        return profit_amount * _leverage / exit_price
+
+    async def take_interval_profit(self, exit_price, pnl_quantity=None):
+        quantity = await self.get_profit_quantity(exit_price, pnl_quantity)
+        create_take_profit = getattr(self, "create_take_profit")
+        position = getattr(self, "position")
+        price_check = None
+        if position.kind == "long":
+            if exit_price > position.entryPrice:
+                price_check = True
+        if position.kind == "short":
+            if exit_price < position.entryPrice:
+                price_check = True
+        if quantity < abs(position.positionAmt) and price_check:
+            return await create_take_profit(
+                exit_price, position.kind, quantity=quantity
+            )
+
+    async def increase_position(self, new_entry_price, pnl_quantity=None):
+        quantity = await self.get_profit_quantity(new_entry_price, pnl_quantity)
+        maximum_quantity = getattr(self, "maxiumum_quantity", 5)
+        create_take_profit = getattr(self, "create_take_profit")
+        position = getattr(self, "position")
+        if abs(position.positionAmt) < maximum_quantity:
+            if position.positionAmt < 0.5 * maximum_quantity:
+                quantity = quantity * 2
+            if position.kind == "short":
+                return await self.create_limit_sell(new_entry_price, quantity=quantity)
+            else:
+                return await self.create_limit_buy(new_entry_price, quantity=quantity)
+
+    async def get_liquidation_price(self, wallet_balance=None, quantity=None):
+        position = getattr(self, "position")
+        market = getattr(self, "market")
+        get_position = getattr(self, "get_position")
+        _balance = wallet_balance
+        _quantity = quantity
+        if not position:
+            position = await get_position()
+        if not _quantity:
+            _quantity = abs(position.positionAmt)
+        if not _balance:
+            _balance = position.isolatedMargin
+            if position.unrealizedProfit > 0:
+                _balance -= position.unrealizedProfit
+            else:
+                _balance += position.unrealizedProfit
+        print(
+            {
+                "balance": _balance,
+                "entry": position.entryPrice,
+                "quantity": _quantity,
+                "kind": position.kind,
+                "pnl": position.unrealizedProfit,
+            }
+        )
+        return liquidation(
+            _balance,
+            position.entryPrice,
+            _quantity,
+            position.kind,
+            pnl=-(position.unrealizedProfit),
+        )
+
+    async def get_largest_order_price(self, kind=None):
+        _kind = kind
+        get_orders = getattr(self, "get_orders")
+        await get_orders("open")
+        trades = getattr(self, "trades")
+        if not _kind:
+            position = await self._get_position()
+            _kind = position.kind
+        print("kind is ", _kind)
+        if _kind == "long":
+            result = min([x.price for x in trades["open"]])
+        else:
+            result = max([x.price for x in trades["open"]])
+        return result
+
+    async def _get_position(self):
+        position = getattr(self, "position")
+        get_position = getattr(self, "get_position")
+        if not position:
+            position = await get_position(True)
+        return position
+
+    async def determine_initial_margin(
+        self, addition=500, entry=None, kind=None, pnl=0, quantity=None
+    ):
+        _entry = entry
+        _quantity = quantity
+        _kind = kind
+        if not entry or not quantity:
+            position = await self._get_position()
+            _entry = position.entryPrice
+            _kind = position.kind
+            _quantity = abs(position.positionAmt)
+        max_min_price = await self.get_largest_order_price(kind=_kind)
+        if _kind == "long":
+            liquidation_price = max_min_price - addition
+        else:
+            liquidation_price = max_min_price + addition
+        return wallet_balance(liquidation_price, _entry, _quantity, _kind, pnl)
+
     async def determine_price_info(
         self, percent, entry=None, quantity=None, leverage=None
     ):
@@ -456,3 +726,195 @@ def determine_price(percent, entry, leverage, quantity=1):
         "position": position,
         "net-loss": position * percent,
     }
+
+
+def liquidation(balance, entry, quantity, kind="long", pnl=0, leverage=1):
+    direction = 1 if kind == "long" else -1
+    _position = position(entry, quantity, kind, leverage)
+    maintanance_rate, maintanance_amount, maintanance_margin = get_maintanance_amount(
+        _position
+    )
+    return (balance - maintanance_margin + pnl + (maintanance_rate - _position)) / (
+        quantity * (maintanance_rate - direction)
+    )
+
+
+def position(entry, quantity, kind="long", leverage=1):
+    direction = {"long": 1, "short": -1}
+    return direction[kind] * quantity * (entry / leverage)
+
+
+def get_maintanance_amount(_position):
+    margin = lambda x: x * _position / 100
+
+    if _position < 50000:
+        return 0.4 / 100, 0.4 * _position / 100, margin(0.4)
+    if 50000 < _position < 250000:
+        return 0.5 / 100, (_position * (0.5 - 0.4) / 100) + 50, margin(0.5)
+    if 250000 < _position < 1000000:
+        return 1 / 100, (_position * (1 - 0.5) / 100) + 1300, margin(1)
+    if 1000000 < _position < 5000000:
+        return 2.5 / 100, (_position * (2.5 - 1) / 100) + 16300, margin(2.5)
+
+
+def yielder(
+    start_price,
+    maximumQuantity,
+    profit_difference=100,
+    difference=50,
+    quantity=0.5,
+    kind="long",
+):
+    remaining = maximumQuantity
+    starting_price = start_price
+    while remaining > 0:
+        large = starting_price + difference
+        small = starting_price - difference
+        remaining -= quantity
+        yield {"high": large, "low": small}
+        if kind == "long":
+            starting_price = large
+        else:
+            starting_price = small
+
+
+def trade_generator(
+    entryPrice,
+    currentSize,
+    maximumQuantity=5,
+    price_difference=50,
+    quantity=0.5,
+    entryDifference=100,
+    kind="long",
+):
+    price_to_be_used_to_generate = maximumQuantity - currentSize
+    maximum_trade_count = int(price_difference / quantity)
+    trades = {"buys": [], "sells": []}
+    if kind == "long":
+        exitPrice = entryPrice + entryDifference
+        trades["sells"].append(
+            {"price": exitPrice, "quantity": currentSize,}
+        )
+    else:
+        exitPrice = entryPrice - entryDifference
+        trades["buys"].append(
+            {"price": exitPrice, "quantity": currentSize,}
+        )
+    for trade in yielder(
+        entryPrice,
+        price_to_be_used_to_generate,
+        profit_difference=entryDifference,
+        difference=price_difference,
+        quantity=quantity,
+        kind=kind,
+    ):
+        if kind == "short" and trade["low"] in [entryPrice, exitPrice]:
+            pass
+        else:
+            trades["buys"].append({"price": trade["low"], "quantity": quantity})
+        if kind == "long" and trade["high"] in [exitPrice, entryPrice]:
+            pass
+        else:
+            trades["sells"].append(
+                {"price": trade["high"], "quantity": quantity,}
+            )
+    return trades
+
+
+def get_quantity(margin_price, exit_price, leverage=1):
+    return margin_price * leverage / exit_price
+
+
+def exit_price_determiner(
+    percent, quantity, leverage, entry_price, initial_pnl, kind="long"
+):
+
+    remaining_quantity = quantity
+    start_entry = entry_price
+    start_result = determine_price(percent, entry_price, leverage, quantity)
+    if kind == "long":
+        start_quantity = get_quantity(
+            initial_pnl, start_result["bull"], leverage=leverage
+        )
+    else:
+        start_quantity = get_quantity(
+            initial_pnl, start_result["bear"], leverage=leverage
+        )
+    while remaining_quantity > 0.005:
+        result = determine_price(percent, start_entry, leverage, start_quantity)
+        profit_margin = result["position"]
+        if kind == "long":
+            start_entry = result["bull"]
+        else:
+            start_entry = result["bear"]
+        yield {"price": start_entry, "quantity": start_quantity}
+        _quantity = get_quantity(profit_margin, start_entry, leverage=leverage)
+        start_quantity = _quantity
+        remaining_quantity -= start_quantity
+
+
+def initial_margin(entry_price, quantity, leverage=1):
+    return (entry_price * quantity) / leverage
+
+
+def determine_profit_qty_and_price(
+    exit_percent,
+    entry_price,
+    leverage=100,
+    quantity=1,
+    take_profit_interval=4,
+    maxQuantity=5,
+    kind="long",
+):
+    _initial_margin = initial_margin(entry_price, quantity, leverage=leverage)
+    profit_margin = _initial_margin / take_profit_interval
+    buys = [
+        x
+        for x in exit_price_determiner(
+            exit_percent / take_profit_interval,
+            quantity,
+            leverage,
+            entry_price,
+            profit_margin,
+            kind="long",
+        )
+    ]
+    sells = [
+        x
+        for x in exit_price_determiner(
+            exit_percent / take_profit_interval,
+            quantity,
+            leverage,
+            entry_price,
+            profit_margin,
+            kind="short",
+        )
+    ]
+    reverse = "short" if kind == "long" else "long"
+    new_buys = []
+    new_sells = []
+    addition = quantity
+    if kind == "long":
+        new_sells = buys
+        for j in sells:
+            if addition < maxQuantity:
+                new_buys.append(j)
+                addition += j["quantity"]
+    else:
+        new_buys = sells
+        for j in buys:
+            if addition < maxQuantity:
+                new_sells.append(j)
+                addition += j["quantity"]
+    return {"buys": new_buys, "sells": new_sells}
+
+
+def wallet_balance(liquidation_price, entry, quantity, kind="long", pnl=0):
+    direction = 1 if kind == "long" else -1
+    _position = position(entry, quantity, kind)
+    maintanance_rate, maintanance_amount, maintanance_margin = get_maintanance_amount(
+        _position
+    )
+    top = liquidation_price * (quantity * (maintanance_rate - direction))
+    balance = top - pnl - (maintanance_rate - _position) + maintanance_margin
+    return balance
