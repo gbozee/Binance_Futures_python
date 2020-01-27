@@ -442,7 +442,6 @@ class HelperMixin:
 
     async def update_position(self):
         position = await self._get_position()
-        actual_current_price = await get_price()
         if position.entryPrice:
             currentPrice = position.entryPrice
             quantity = abs(position.positionAmt)
@@ -450,7 +449,7 @@ class HelperMixin:
         else:
             quantity = getattr(self, "quantity")
             get_price = getattr(self, "get_price")
-            currentPrice = actual_current_price
+            currentPrice = await get_price()
             kind = "short"
 
         return await self.create_bulk_trades(
