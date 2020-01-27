@@ -442,6 +442,7 @@ class HelperMixin:
 
     async def update_position(self):
         position = await self._get_position()
+        actual_current_price = await get_price()
         if position.entryPrice:
             currentPrice = position.entryPrice
             quantity = abs(position.positionAmt)
@@ -449,8 +450,9 @@ class HelperMixin:
         else:
             quantity = getattr(self, "quantity")
             get_price = getattr(self, "get_price")
-            currentPrice = await get_price()
+            currentPrice = actual_current_price
             kind = "short"
+
         return await self.create_bulk_trades(
             entry_price=currentPrice,
             leverage=position.leverage,
@@ -513,6 +515,7 @@ class HelperMixin:
         kind=None,
         currentPrice=None,
     ):
+        _currentPrice = currentPrice
         position = getattr(self, "position")
         get_position = getattr(self, "get_position")
         take_profit_p = getattr(self, "take_profit_p")
@@ -528,6 +531,11 @@ class HelperMixin:
                 _kind = position.kind
                 _quantity = abs(position.positionAmt)
                 _leverage = position.leverage
+
+        if _currentPrice:
+            if _entry_price > currentPrice:
+                _currentPrice = _entry_price
+                _entry_price = currentPrice
         result = determine_profit_qty_and_price(
             take_profit_p,
             _entry_price,
@@ -556,15 +564,16 @@ class HelperMixin:
         #     entryDifference=exitPrice,
         #     kind=position.kind,
         # )
-        if currentPrice:
+        if _currentPrice:
+            bigger = _entry_price if _entry_price > _currentPrice else _currentPrice
             if _kind == "long":
                 return {
-                    "buys": [x for x in result["buys"] if x["price"] < currentPrice],
-                    "sells": [x for x in result["buys"] if x["price"] > currentPrice],
+                    "buys": [x for x in result["buys"] if x["price"] < _currentPrice],
+                    "sells": [x for x in result["sells"] if x["price"] > bigger],
                 }
             return {
-                "buys": [x for x in result["buys"] if x["price"] < currentPrice],
-                "sells": [x for x in result["sells"] if x["price"] > currentPrice],
+                "buys": [x for x in result["buys"] if x["price"] < _currentPrice],
+                "sells": [x for x in result["sells"] if x["price"] > bigger],
             }
         return result
 
