@@ -440,7 +440,7 @@ class HelperMixin:
         except Exception as e:
             print(e)
 
-    async def update_position(self, useCurrent=True):
+    async def update_position(self, useCurrent=True,**kwargs):
         interval = getattr(self, "no_of_trades", 4)
         position = await self._get_position()
         if position.entryPrice:
