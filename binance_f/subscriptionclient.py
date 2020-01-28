@@ -440,7 +440,8 @@ class HelperMixin:
         except Exception as e:
             print(e)
 
-    async def update_position(self):
+    async def update_position(self, useCurrent=True):
+        interval = getattr(self, "no_of_trades", 4)
         position = await self._get_position()
         if position.entryPrice:
             currentPrice = position.entryPrice
@@ -457,6 +458,8 @@ class HelperMixin:
             leverage=position.leverage,
             quantity=quantity,
             kind=kind,
+            useCurrent=useCurrent,
+            take_profit_interval=interval,
         )
 
     async def create_bulk_trades(
@@ -466,6 +469,7 @@ class HelperMixin:
         leverage=None,
         quantity=None,
         kind=None,
+        useCurrent=True
         # price_difference=50, quantity=0.5
     ):
         get_price = getattr(self, "get_price")
@@ -479,6 +483,7 @@ class HelperMixin:
             leverage=leverage,
             quantity=quantity,
             kind=kind,
+            useCurrent=useCurrent,
         )
         position = await self._get_position()
         await self.cancel_all_orders()
@@ -510,15 +515,18 @@ class HelperMixin:
         entry_price=None,
         leverage=None,
         quantity=None,
-        take_profit_interval=4,
+        take_profit_interval=None,
         kind=None,
         currentPrice=None,
+        useCurrent=True,
     ):
         _currentPrice = currentPrice
+        _take_profit_interval = take_profit_interval or getattr(self, "no_of_trades", 4)
         position = getattr(self, "position")
         get_position = getattr(self, "get_position")
         take_profit_p = getattr(self, "take_profit_p")
         maximum_quantity = getattr(self, "maximum_quantity", 5)
+        multiplier = getattr(self, "slow_market_multiplier", 1)
         _kind = kind
         _leverage = leverage
         _entry_price = entry_price
@@ -531,16 +539,18 @@ class HelperMixin:
                 _quantity = abs(position.positionAmt)
                 _leverage = position.leverage
 
-        if _currentPrice:
-            if _entry_price > currentPrice:
-                _currentPrice = _entry_price
-                _entry_price = currentPrice
+        if useCurrent:
+            if _currentPrice:
+                if _entry_price > currentPrice:
+                    _currentPrice = _entry_price
+                    _entry_price = currentPrice
         result = determine_profit_qty_and_price(
             take_profit_p,
             _entry_price,
             _leverage,
             _quantity,
-            take_profit_interval,
+            _take_profit_interval,
+            _take_profit_interval * multiplier,
             maximum_quantity,
             _kind,
         )
@@ -875,30 +885,37 @@ def determine_profit_qty_and_price(
     leverage=100,
     quantity=1,
     take_profit_interval=4,
+    slow_market_interval=4,
     maxQuantity=5,
     kind="long",
 ):
     _initial_margin = initial_margin(entry_price, quantity, leverage=leverage)
     profit_margin = _initial_margin / take_profit_interval
+    if kind == "long":
+        buy_interval = take_profit_interval
+        sell_interval = slow_market_interval
+    else:
+        buy_interval = slow_market_interval
+        sell_interval = take_profit_interval
     buys = [
         x
         for x in exit_price_determiner(
-            exit_percent / take_profit_interval,
+            exit_percent / buy_interval,
             quantity,
             leverage,
             entry_price,
-            profit_margin,
+            _initial_margin / buy_interval,
             kind="long",
         )
     ]
     sells = [
         x
         for x in exit_price_determiner(
-            exit_percent / take_profit_interval,
+            exit_percent / sell_interval,
             quantity,
             leverage,
             entry_price,
-            profit_margin,
+            _initial_margin / sell_interval,
             kind="short",
         )
     ]
