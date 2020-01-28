@@ -518,7 +518,7 @@ class HelperMixin:
         position = getattr(self, "position")
         get_position = getattr(self, "get_position")
         take_profit_p = getattr(self, "take_profit_p")
-        maximum_quantity = getattr(self, "maxiumum_quantity", 5)
+        maximum_quantity = getattr(self, "maximum_quantity", 5)
         _kind = kind
         _leverage = leverage
         _entry_price = entry_price
@@ -624,7 +624,7 @@ class HelperMixin:
 
     async def increase_position(self, new_entry_price, pnl_quantity=None):
         quantity = await self.get_profit_quantity(new_entry_price, pnl_quantity)
-        maximum_quantity = getattr(self, "maxiumum_quantity", 5)
+        maximum_quantity = getattr(self, "maximum_quantity", 5)
         create_take_profit = getattr(self, "create_take_profit")
         position = getattr(self, "position")
         if abs(position.positionAmt) < maximum_quantity:
