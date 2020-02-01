@@ -3,7 +3,6 @@ from binance_f.impl.restapirequestimpl import RestApiRequestImpl
 from binance_f.impl.restapiinvoker import call_async as call_sync
 from binance_f.model.constant import *
 
-
 class RequestClient(object):
     def __init__(self, debug=True, **kwargs):
         """

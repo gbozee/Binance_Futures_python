@@ -12,6 +12,7 @@ from binance_f.impl.websocketwatchdog import WebSocketWatchDog
 from binance_f.model import *
 from binance_f.model import constant, order, position
 from binance_f.model.constant import *
+from binance_f import autotrade
 
 
 class ConnectionsKlass:
@@ -440,7 +441,47 @@ class HelperMixin:
         except Exception as e:
             print(e)
 
-    async def update_position(self, useCurrent=True,**kwargs):
+    async def update_position(self, run=True):
+        interval = getattr(self, "no_of_trades", 4)
+        run_range = getattr(self, "run_range", 1000)
+        maximum_quantity = getattr(self, "maximum_quantity", 6)
+        trade_interval = getattr(self, "trade_interval", 50)
+        take_profit = getattr(self, "take_profit_p")
+        stop_loss = getattr(self, "stop_loss_p")
+        position = await self._get_position()
+        get_price = getattr(self, "get_price")
+        currentPrice = await get_price()
+        helper = autotrade.AutoTrader(
+            range=run_range,
+            maximum_quantity=maximum_quantity,
+            interval=trade_interval,
+            take_profit=take_profit,
+            pair=interval,
+        )
+        trades = helper.build_trades(currentPrice, position)
+        if run:
+            tasks = []
+            for trade in trades["buys"]:
+                if trade["price"] < currentPrice:
+                    task = self.create_limit_buy(trade["price"], trade["quantity"])
+                else:
+                    task = self.create_stop_loss(
+                        trade["price"], "short", quantity=trade["quantity"]
+                    )
+                tasks.append(task)
+            for trade in trades["sells"]:
+                if trade["price"] > currentPrice:
+                    task = self.create_limit_sell(trade["price"], trade["quantity"])
+                else:
+                    task = self.create_stop_loss(
+                        trade["price"], "long", quantity=trade["quantity"]
+                    )
+                tasks.append(task)
+            await self.cancel_all_orders()
+            await asyncio.gather(*tasks)
+        return trades
+
+    async def update_position2(self, useCurrent=True, **kwargs):
         interval = getattr(self, "no_of_trades", 4)
         position = await self._get_position()
         if position.entryPrice:
