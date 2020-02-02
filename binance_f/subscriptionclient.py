@@ -1,7 +1,7 @@
 import asyncio
 import typing
 import urllib.parse
-
+import math
 from binance_f.base.printobject import *
 from binance_f.constant.system import WebSocketDefine
 from binance_f.exception.binanceapiexception import BinanceApiException
@@ -441,16 +441,13 @@ class HelperMixin:
         except Exception as e:
             print(e)
 
-    async def update_position(self, run=True):
+    async def filter_out_existing_trades(self, open_trades, currentPrice, position):
         interval = getattr(self, "no_of_trades", 4)
         run_range = getattr(self, "run_range", 1000)
         maximum_quantity = getattr(self, "maximum_quantity", 6)
         trade_interval = getattr(self, "trade_interval", 50)
         take_profit = getattr(self, "take_profit_p")
         stop_loss = getattr(self, "stop_loss_p")
-        position = await self._get_position()
-        get_price = getattr(self, "get_price")
-        currentPrice = await get_price()
         helper = autotrade.AutoTrader(
             range=run_range,
             maximum_quantity=maximum_quantity,
@@ -459,6 +456,28 @@ class HelperMixin:
             pair=interval,
         )
         trades = helper.build_trades(currentPrice, position)
+        buys = [
+            {"price": x.price, "quantity": x.origQty}
+            for x in open_trades
+            if x.side == "BUY"
+        ]
+        sells = [
+            {"price": x.price, "quantity": x.origQty}
+            for x in open_trades
+            if x.side == "SELL"
+        ]
+        return unionize(trades, {"buys": buys, "sells": sells})
+
+    async def update_position(self, run=True):
+        get_orders = getattr(self, "get_orders")
+        get_price = getattr(self, "get_price")
+        position, open_trades, currentPrice = await asyncio.gather(
+            self._get_position(), get_orders("open"), get_price()
+        )
+
+        trades = await self.filter_out_existing_trades(
+            open_trades, currentPrice, position
+        )
         if run:
             tasks = []
             if len(trades["buys"]) == 0:
@@ -485,7 +504,6 @@ class HelperMixin:
                         trade["price"], "long", quantity=trade["quantity"]
                     )
                 tasks.append(task)
-            await self.cancel_all_orders()
             await asyncio.gather(*tasks)
         return trades
 
@@ -996,3 +1014,33 @@ def wallet_balance(liquidation_price, entry, quantity, kind="long", pnl=0):
     top = liquidation_price * (quantity * (maintanance_rate - direction))
     balance = top - pnl - (maintanance_rate - _position) + maintanance_margin
     return balance
+
+
+def unionize(generated, actual):
+    roundup = lambda x: int(math.floor(x / 10.0)) * 10
+    rounded_gen = {
+        "buys": [(i, roundup(x["price"])) for i, x in enumerate(generated["buys"])],
+        "sells": [(i, roundup(x["price"])) for i, x in enumerate(generated["sells"])],
+    }
+    difference = {
+        "buys": set([x[1] for x in rounded_gen["buys"]]).difference(
+            set([roundup(x["price"]) for x in actual["buys"]])
+        ),
+        "sells": set([x[1] for x in rounded_gen["sells"]]).difference(
+            set([roundup(x["price"]) for x in actual["sells"]])
+        ),
+    }
+    indexes = {
+        "buys": [
+            generated["buys"][x[0]]
+            for x in rounded_gen["buys"]
+            if x[1] in difference["buys"]
+        ],
+        "sells": [
+            generated["sells"][x[0]]
+            for x in rounded_gen["sells"]
+            if x[1] in difference["sells"]
+        ],
+    }
+    return indexes
+
