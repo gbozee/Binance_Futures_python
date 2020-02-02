@@ -444,8 +444,8 @@ class HelperMixin:
     async def filter_out_existing_trades(self, open_trades, currentPrice, position):
         interval = getattr(self, "no_of_trades", 4)
         run_range = getattr(self, "run_range", 1000)
-        maximum_quantity = getattr(self, "maximum_quantity", 6)
         trade_interval = getattr(self, "trade_interval", 50)
+        maximum_quantity = getattr(self, "maximum_quantity", 6)
         take_profit = getattr(self, "take_profit_p")
         stop_loss = getattr(self, "stop_loss_p")
         helper = autotrade.AutoTrader(
@@ -471,6 +471,7 @@ class HelperMixin:
     async def update_position(self, run=True):
         get_orders = getattr(self, "get_orders")
         get_price = getattr(self, "get_price")
+        trade_interval = getattr(self, "trade_interval", 50)
         position, open_trades, currentPrice = await asyncio.gather(
             self._get_position(), get_orders("open"), get_price()
         )
