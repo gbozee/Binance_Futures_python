@@ -448,6 +448,7 @@ class HelperMixin:
         maximum_quantity = getattr(self, "maximum_quantity", 6)
         take_profit = getattr(self, "take_profit_p")
         stop_loss = getattr(self, "stop_loss_p")
+        qty = maximum_quantity / (run_range / trade_interval)
         helper = autotrade.AutoTrader(
             range=run_range,
             maximum_quantity=maximum_quantity,
@@ -466,7 +467,8 @@ class HelperMixin:
             for x in open_trades
             if x.side == "SELL"
         ]
-        return unionize(trades, {"buys": buys, "sells": sells})
+        # return unionize(trades, {"buys": buys, "sells": sells}), qty * interval
+        return trades, qty * interval
 
     async def update_position(self, run=True):
         get_orders = getattr(self, "get_orders")
@@ -476,19 +478,18 @@ class HelperMixin:
             self._get_position(), get_orders("open"), get_price()
         )
 
-        trades = await self.filter_out_existing_trades(
+        trades, qty = await self.filter_out_existing_trades(
             open_trades, currentPrice, position
         )
+
+        if len(trades["buys"]) == 0:
+            trades["buys"] = [{"price": currentPrice - trade_interval, "quantity": qty}]
+        if len(trades["sells"]) == 0:
+            trades["sells"] = [
+                {"price": currentPrice + trade_interval, "quantity": qty}
+            ]
         if run:
             tasks = []
-            if len(trades["buys"]) == 0:
-                trades["buys"] = [
-                    {"price": currentPrice - trade_interval, "quantity": 0.01}
-                ]
-            if len(trades["sells"]) == 0:
-                trades["sells"] = [
-                    {"price": currentPrice + trade_interval, "quantity": 0.01}
-                ]
             for trade in trades["buys"]:
                 if trade["price"] < currentPrice:
                     task = self.create_limit_buy(trade["price"], trade["quantity"])
@@ -505,6 +506,7 @@ class HelperMixin:
                         trade["price"], "long", quantity=trade["quantity"]
                     )
                 tasks.append(task)
+            await self.cancel_all_orders()
             await asyncio.gather(*tasks)
         return trades
 
