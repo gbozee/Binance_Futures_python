@@ -461,6 +461,14 @@ class HelperMixin:
         trades = helper.build_trades(currentPrice, position)
         if run:
             tasks = []
+            if len(trades["buys"]) == 0:
+                trades["buys"] = [
+                    {"price": currentPrice - trade_interval, "quantity": 0.01}
+                ]
+            if len(trades["sells"]) == 0:
+                trades["sells"] = [
+                    {"price": currentPrice + trade_interval, "quantity": 0.01}
+                ]
             for trade in trades["buys"]:
                 if trade["price"] < currentPrice:
                     task = self.create_limit_buy(trade["price"], trade["quantity"])
