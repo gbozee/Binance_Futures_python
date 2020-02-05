@@ -494,16 +494,20 @@ class HelperMixin:
                 if trade["price"] < currentPrice:
                     task = self.create_limit_buy(trade["price"], trade["quantity"])
                 else:
-                    task = self.create_stop_loss(
-                        trade["price"], "short", quantity=trade["quantity"]
+                    diff = abs(currentPrice-trade['price'])
+                    new_price = currentPrice - diff
+                    task = self.create_limit_buy(
+                        new_price, quantity=trade["quantity"]
                     )
                 tasks.append(task)
             for trade in trades["sells"]:
                 if trade["price"] > currentPrice:
                     task = self.create_limit_sell(trade["price"], trade["quantity"])
                 else:
-                    task = self.create_stop_loss(
-                        trade["price"], "long", quantity=trade["quantity"]
+                    diff = abs(currentPrice - trade['price'])
+                    new_price = currentPrice + diff
+                    task = self.create_limit_sell(
+                        new_price, trade['quantity']
                     )
                 tasks.append(task)
             await self.cancel_all_orders()
