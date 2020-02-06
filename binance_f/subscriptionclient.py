@@ -136,6 +136,7 @@ class SubscriptionClient(object):
         interval: "CandlestickInterval",
         callback,
         error_handler=None,
+        running_callback=None,
     ):
         """
         Kline/Candlestick Streams
@@ -148,7 +149,7 @@ class SubscriptionClient(object):
             symbol, interval, callback, error_handler
         )
         request.name = "subscribe_candlestick_event"
-        self.__create_connection(request)
+        self.__create_connection(request, running_callback=running_callback)
 
     def subscribe_symbol_miniticker_event(
         self, symbol: "str", callback, error_handler=None
@@ -494,21 +495,17 @@ class HelperMixin:
                 if trade["price"] < currentPrice:
                     task = self.create_limit_buy(trade["price"], trade["quantity"])
                 else:
-                    diff = abs(currentPrice-trade['price'])
+                    diff = abs(currentPrice - trade["price"])
                     new_price = currentPrice - diff
-                    task = self.create_limit_buy(
-                        new_price, quantity=trade["quantity"]
-                    )
+                    task = self.create_limit_buy(new_price, quantity=trade["quantity"])
                 tasks.append(task)
             for trade in trades["sells"]:
                 if trade["price"] > currentPrice:
                     task = self.create_limit_sell(trade["price"], trade["quantity"])
                 else:
-                    diff = abs(currentPrice - trade['price'])
+                    diff = abs(currentPrice - trade["price"])
                     new_price = currentPrice + diff
-                    task = self.create_limit_sell(
-                        new_price, trade['quantity']
-                    )
+                    task = self.create_limit_sell(new_price, trade["quantity"])
                 tasks.append(task)
             await self.cancel_all_orders()
             await asyncio.gather(*tasks)
