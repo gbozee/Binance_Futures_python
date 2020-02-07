@@ -4,3 +4,4 @@ startup.sh
 *__pycache__
 *.egg-info
 *.pyc
+*.mypy_cache

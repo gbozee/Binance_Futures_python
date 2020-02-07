@@ -1,13 +1,33 @@
 import time
-from binance_f.impl.websocketrequest import WebsocketRequest
-from binance_f.impl.utils.channels import *
+
+from binance_f.base.printobject import *
 from binance_f.impl.utils.channelparser import ChannelParser
-from binance_f.impl.utils.timeservice import *
+from binance_f.impl.utils.channels import *
 from binance_f.impl.utils.inputchecker import *
+from binance_f.impl.utils.jsonwrapper import JsonWrapper
+from binance_f.impl.utils.timeservice import *
+from binance_f.impl.websocketrequest import WebsocketRequest
 from binance_f.model import *
 
-# For develop
-from binance_f.base.printobject import *
+class SimpleSocketImpl(object):
+    def subscribe_backend(self, callback,error_handler=None):
+        check_should_not_none(callback, "callback")
+
+        def subscription_handler(connection):
+            connection.send(json.dumps({"status": "Connect"}))
+            time.sleep(0.01)
+
+        def json_parse(json_wrapper:JsonWrapper):
+            result = json_wrapper.json_object
+            return result
+
+        request = WebsocketRequest()
+        request.subscription_handler = subscription_handler
+        request.json_parser = json_parse
+        request.update_callback = callback
+        request.error_handler = error_handler
+
+        return request
 
 
 class WebsocketRequestImpl(object):
@@ -334,4 +354,3 @@ class WebsocketRequestImpl(object):
         request.error_handler = error_handler
 
         return request
-

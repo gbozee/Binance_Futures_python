@@ -23,7 +23,10 @@ class Order:
     @staticmethod
     def json_parse(json_data):
         result = Order()
-        result.clientOrderId = json_data.get_string("clientOrderId")
+        try:
+            result.clientOrderId = json_data.get_string("clientOrderId")
+        except Exception as e:
+            pass
         result.cumQuote = json_data.get_float("cumQuote")
         result.executedQty = json_data.get_float_or_default("executedQty", None)
         result.orderId = json_data.get_int("orderId")

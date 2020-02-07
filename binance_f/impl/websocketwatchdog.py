@@ -4,6 +4,7 @@ import time
 from apscheduler.schedulers.blocking import BlockingScheduler
 from binance_f.impl.websocketconnection import ConnectionState
 from binance_f.impl.utils.timeservice import get_current_timestamp
+from websocket import WebSocketException
 
 
 def watch_dog_job(*args):
@@ -21,8 +22,12 @@ def watch_dog_job(*args):
                     )
         elif connection.in_delay_connection():
             watch_dog_instance.logger.warning("[Sub] call re_connect")
-            connection.re_connect()
-            pass
+            try:
+                connection.re_connect()
+            except WebSocketException as e:
+                connection.re_connect_in_delay(
+                    watch_dog_instance.connection_delay_failure
+                )
         elif connection.state == ConnectionState.CLOSED_ON_ERROR:
             if watch_dog_instance.is_auto_connect:
                 connection.re_connect_in_delay(

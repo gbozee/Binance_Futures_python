@@ -47,9 +47,20 @@ def trade_generator(
             return v > ending_price
         return v < ending_price
 
+    temp = current_price
     if position_size < (maximum_quantity / 2):
         current_price = None
 
+    if kind == 'long':
+        if temp > start:
+            start = temp
+            current_price = entry_price
+    # if kind == 'short':
+    #     if temp > start:
+    #         current_price
+
+    if position_size >= maximum_quantity:
+        maximum_quantity = maximum_quantity * 8
     result = get_result_pair(
         entry_price=start,
         minimum_trades=minimum_trades,
@@ -221,8 +232,10 @@ def generate_buy_sell_pair(
         first_sell = sell_generator.send(None)
         first_buy = buy_generator.send(None)
         if last_price:
-            first_buy = buy_generator.send((last_price, True, multiplier))
-            first_sell = sell_generator.send((last_price, False, multiplier))
+            if kind == 'short':
+                first_sell = sell_generator.send((last_price, False, multiplier))
+            else:
+                first_buy = buy_generator.send((last_price, True, multiplier))
         bb = [first_buy]
         ss = [first_sell]
     except StopIteration as e:

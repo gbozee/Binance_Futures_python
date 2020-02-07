@@ -1,18 +1,19 @@
 import asyncio
+import math
 import typing
 import urllib.parse
-import math
+
+from binance_f import autotrade
 from binance_f.base.printobject import *
 from binance_f.constant.system import WebSocketDefine
 from binance_f.exception.binanceapiexception import BinanceApiException
 from binance_f.impl.restapirequestimpl import RestApiRequestImpl
 from binance_f.impl.websocketconnection import WebsocketConnection
-from binance_f.impl.websocketrequestimpl import WebsocketRequestImpl
+from binance_f.impl.websocketrequestimpl import SimpleSocketImpl, WebsocketRequestImpl
 from binance_f.impl.websocketwatchdog import WebSocketWatchDog
 from binance_f.model import *
 from binance_f.model import constant, order, position
 from binance_f.model.constant import *
-from binance_f import autotrade
 
 
 class ConnectionsKlass:
@@ -31,6 +32,66 @@ class ConnectionsKlass:
 
     def __getitem__(self, key) -> WebsocketConnection:
         return self._data[key]
+
+
+class SimpleSubscriptionClient(object):
+    def __init__(self, **kwargs):
+        """
+        Create the subscription client to subscribe the update from server.
+
+        :param kwargs: The option of subscription connection.
+            api_key: The public key applied from Binance.
+            secret_key: The private key applied from Binance.
+            uri: Set the URI for subscription.
+            is_auto_connect: When the connection lost is happening on the subscription line, specify whether the client
+                            reconnect to server automatically. The connection lost means:
+                                Caused by network problem
+                                The connection close triggered by server (happened every 24 hours)
+                            No any message can be received from server within a specified time, see receive_limit_ms
+            receive_limit_ms: Set the receive limit in millisecond. If no message is received within this limit time,
+                            the connection will be disconnected.
+            connection_delay_failure: If auto reconnect is enabled, specify the delay time before reconnect.
+        """
+        self.websocket_request_impl = SimpleSocketImpl()
+        self.connections = ConnectionsKlass()
+        # self.connections = list()
+        self.uri = None
+        is_auto_connect = True
+        receive_limit_ms = 60000
+        connection_delay_failure = 15
+        if "uri" in kwargs:
+            self.uri = kwargs["uri"]
+        if "is_auto_connect" in kwargs:
+            is_auto_connect = kwargs["is_auto_connect"]
+        if "receive_limit_ms" in kwargs:
+            receive_limit_ms = kwargs["receive_limit_ms"]
+        if "connection_delay_failure" in kwargs:
+            connection_delay_failure = kwargs["connection_delay_failure"]
+        self.__watch_dog = WebSocketWatchDog(
+            is_auto_connect, receive_limit_ms, connection_delay_failure
+        )
+
+    def thread_safe_shutdown(self, key: str, callback=None):
+        connection: WebsocketConnection = self.connections[key]
+        try:
+            connection.thread_safe(callback=callback)
+        except Exception:
+            connection.shutdown_gracefully()
+
+    def unsubscribe_all(self):
+        for conn in self.connections:
+            conn.close()
+        self.connections.clear()
+
+    def subscribe_backend(self, callback, error_handler=None, running_callback=None):
+        request = self.websocket_request_impl.subscribe_backend(callback, error_handler)
+        request.name = "subscribe_backend"
+        connection = WebsocketConnection(
+            None, None, self.uri, self.__watch_dog, request, simple=True
+        )
+        self.connections.append(connection)
+        connection.connect()
+        self.thread_safe_shutdown(request.name, callback=running_callback)
 
 
 class SubscriptionClient(object):
@@ -97,6 +158,18 @@ class SubscriptionClient(object):
         for conn in self.connections:
             conn.close()
         self.connections.clear()
+
+    def subscribe_backend(
+        self, url, callback, error_handler=None, running_callback=None
+    ):
+        request = self.websocket_request_impl.subscribe_backend(callback, error_handler)
+        request.name = "subscribe_backend"
+        connection = WebsocketConnection(
+            self.__api_key, self.__secret_key, url, self.__watch_dog, request
+        )
+        self.connections.append(connection)
+        connection.connect()
+        self.thread_safe_shutdown(request.name, callback=running_callback)
 
     def subscribe_aggregate_trade_event(
         self, symbol: "str", callback, error_handler=None
@@ -349,6 +422,42 @@ class HelperMixin:
             kwargs["side"] = constant.OrderSide.BUY
         return await client.post_order(**kwargs)
 
+    async def _market(self, quantity, kind="sell"):
+        buy_symbol = getattr(self, "buy_symbol")
+        places = getattr(self, "places")
+        client = getattr(self, "client")
+        kwargs = dict(
+            symbol=buy_symbol,
+            side=constant.OrderSide.SELL,
+            ordertype=constant.OrderType.MARKET,
+            quantity=format(places % quantity),
+        )
+        if kind == "buy":
+            kwargs["side"] = constant.OrderSide.BUY
+        return await client.post_order(**kwargs)
+
+    async def _stop_market(
+        self, quantity, price, orderType, kind="long", reduceOnly=None
+    ) -> order.Order:
+        buy_symbol = getattr(self, "buy_symbol")
+        places = getattr(self, "places")
+        price_places = getattr(self, "price_places")
+        client = getattr(self, "client")
+        kwargs = {
+            "symbol": buy_symbol,
+            "ordertype": orderType,
+            "quantity": format(places % quantity),
+            "side": constant.OrderSide.SELL,
+            "stopPrice": format(price_places % (price + 1)),
+            "reduceOnly": reduceOnly,
+            # "workingType": constant.WorkingType.MARK_PRICE if kind=="long" else constant.WorkingType.CONTRACT_PRICE,
+        }
+        if kind == "short":
+            kwargs["ordertype"] = orderType
+            kwargs["side"] = constant.OrderSide.BUY
+            kwargs["stopPrice"] = format(price_places % (price - 1))
+        return await client.post_order(**kwargs)
+
     async def _stop_limit(
         self,
         quantity,
@@ -357,6 +466,7 @@ class HelperMixin:
         kind="long",
         reduceOnly=None,
         timeInForce=constant.TimeInForce.GTC,
+        workingType=WorkingType.INVALID,
     ) -> order.Order:
         buy_symbol = getattr(self, "buy_symbol")
         places = getattr(self, "places")
@@ -373,6 +483,7 @@ class HelperMixin:
             "reduceOnly": reduceOnly,
             "timeInForce": timeInForce,
             # "workingType": constant.WorkingType.MARK_PRICE if kind=="long" else constant.WorkingType.CONTRACT_PRICE,
+            "workingType": workingType
         }
         if kind == "short":
             kwargs["ordertype"] = orderType
@@ -404,17 +515,29 @@ class HelperMixin:
     async def create_limit_buy(self, price, quantity) -> order.Order:
         return await self._limit(price, quantity, kind="buy")
 
+    async def create_market_buy(self, quantity) -> order.Order:
+        return await self._market(quantity, kind="buy")
+
+    async def create_market_sell(self, quantity) -> order.Order:
+        return await self._market(quantity, kind="sell")
+
     async def create_limit_sell(self, price, quantity) -> order.Order:
         return await self._limit(price, quantity, kind="sell")
 
-    async def create_stop_loss(self, price, kind, quantity=None, reduceOnly=None):
+    async def create_stop_loss(
+        self, price, kind, quantity=None, reduceOnly=None, _type="limit",workingType=WorkingType.INVALID
+    ):
         """
         when creating stop loss, the sell price is the price used for short position
         and the buy price is the price used for long position"""
         budget = getattr(self, "budget")
         _v = quantity or budget
-        return await self._stop_limit(
-            _v, price, constant.OrderType.STOP, kind=kind, reduceOnly=reduceOnly
+        if _type == "limit":
+            return await self._stop_limit(
+                _v, price, constant.OrderType.STOP, kind=kind, reduceOnly=reduceOnly,workingType=workingType
+            )
+        return await self._stop_market(
+            _v, price, constant.OrderType.STOP_MARKET, kind=kind, reduceOnly=reduceOnly
         )
 
     async def get_leverage(self, entry=False) -> float:
@@ -885,14 +1008,10 @@ def trade_generator(
     trades = {"buys": [], "sells": []}
     if kind == "long":
         exitPrice = entryPrice + entryDifference
-        trades["sells"].append(
-            {"price": exitPrice, "quantity": currentSize,}
-        )
+        trades["sells"].append({"price": exitPrice, "quantity": currentSize})
     else:
         exitPrice = entryPrice - entryDifference
-        trades["buys"].append(
-            {"price": exitPrice, "quantity": currentSize,}
-        )
+        trades["buys"].append({"price": exitPrice, "quantity": currentSize})
     for trade in yielder(
         entryPrice,
         price_to_be_used_to_generate,
@@ -908,9 +1027,7 @@ def trade_generator(
         if kind == "long" and trade["high"] in [exitPrice, entryPrice]:
             pass
         else:
-            trades["sells"].append(
-                {"price": trade["high"], "quantity": quantity,}
-            )
+            trades["sells"].append({"price": trade["high"], "quantity": quantity})
     return trades
 
 
@@ -1047,4 +1164,3 @@ def unionize(generated, actual):
         ],
     }
     return indexes
-

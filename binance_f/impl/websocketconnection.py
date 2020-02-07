@@ -72,9 +72,32 @@ def websocket_func(*args):
     if connection_instance.state == ConnectionState.CONNECTED:
         connection_instance.state = ConnectionState.IDLE
 
+def simple_websocket_func(*args):
+    connection_instance = args[0]
+    connection_instance.ws = websocket.WebSocketApp(
+        connection_instance.url,
+        on_message=on_message,
+        on_error=on_error,
+        on_close=on_close,
+    )
+    global websocket_connection_handler
+    websocket_connection_handler[connection_instance.ws] = connection_instance
+    connection_instance.logger.info(
+        "[Sub][" + str(connection_instance.id) + "] Connecting..."
+    )
+    connection_instance.delay_in_second = -1
+    connection_instance.ws.on_open = on_open
+    connection_instance.ws.run_forever()
+    connection_instance.logger.info(
+        "[Sub][" + str(connection_instance.id) + "] Connection event loop down"
+    )
+    if connection_instance.state == ConnectionState.CONNECTED:
+        connection_instance.state = ConnectionState.IDLE
+
+    
 
 class WebsocketConnection:
-    def __init__(self, api_key, secret_key, uri, watch_dog, request):
+    def __init__(self, api_key, secret_key, uri, watch_dog, request,simple=False):
         self.__thread = None
         self.url = uri
         self.__api_key = api_key
@@ -89,6 +112,7 @@ class WebsocketConnection:
         global connection_id
         connection_id += 1
         self.id = connection_id
+        self.simple = simple
 
     def in_delay_connection(self):
         return self.delay_in_second != -1
@@ -117,8 +141,12 @@ class WebsocketConnection:
         if self.state == ConnectionState.CONNECTED:
             self.logger.info("[Sub][" + str(self.id) + "] Already connected")
         else:
-            self.__thread = threading.Thread(target=websocket_func, args=[self])
+            target = websocket_func
+            if self.simple:
+                target = simple_websocket_func
+            self.__thread = threading.Thread(target=target, args=[self])
             self.__thread.start()
+
 
     def send(self, data):
         self.ws.send(data)
@@ -158,23 +186,25 @@ class WebsocketConnection:
     def on_message(self, message):
         self.last_receive_time = get_current_timestamp()
         json_wrapper = parse_json_from_string(message)
-
-        if (
-            json_wrapper.contain_key("status")
-            and json_wrapper.get_string("status") != "ok"
-        ):
-            error_code = json_wrapper.get_string_or_default("err-code", "Unknown error")
-            error_msg = json_wrapper.get_string_or_default("err-msg", "Unknown error")
-            self.on_error(error_code + ": " + error_msg)
-        elif (
-            json_wrapper.contain_key("err-code")
-            and json_wrapper.get_int("err-code") != 0
-        ):
-            error_code = json_wrapper.get_string_or_default("err-code", "Unknown error")
-            error_msg = json_wrapper.get_string_or_default("err-msg", "Unknown error")
-            self.on_error(error_code + ": " + error_msg)
-        elif json_wrapper.contain_key("result") and json_wrapper.contain_key("id"):
-            self.__on_receive_response(json_wrapper)
+        if not self.simple:
+            if (
+                json_wrapper.contain_key("status")
+                and json_wrapper.get_string("status") != "ok"
+            ):
+                error_code = json_wrapper.get_string_or_default("err-code", "Unknown error")
+                error_msg = json_wrapper.get_string_or_default("err-msg", "Unknown error")
+                self.on_error(error_code + ": " + error_msg)
+            elif (
+                json_wrapper.contain_key("err-code")
+                and json_wrapper.get_int("err-code") != 0
+            ):
+                error_code = json_wrapper.get_string_or_default("err-code", "Unknown error")
+                error_msg = json_wrapper.get_string_or_default("err-msg", "Unknown error")
+                self.on_error(error_code + ": " + error_msg)
+            elif json_wrapper.contain_key("result") and json_wrapper.contain_key("id"):
+                self.__on_receive_response(json_wrapper)
+            else:
+                self.__on_receive_payload(json_wrapper)
         else:
             self.__on_receive_payload(json_wrapper)
 
