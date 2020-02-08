@@ -22,12 +22,13 @@ def watch_dog_job(*args):
                     )
         elif connection.in_delay_connection():
             watch_dog_instance.logger.warning("[Sub] call re_connect")
-            try:
-                connection.re_connect()
-            except WebSocketException as e:
-                connection.re_connect_in_delay(
-                    watch_dog_instance.connection_delay_failure
-                )
+            connection.re_connect()
+            # try:
+            #     connection.re_connect()
+            # except WebSocketException as e:
+            #     connection.re_connect_in_delay(
+            #         watch_dog_instance.connection_delay_failure
+            #     )
         elif connection.state == ConnectionState.CLOSED_ON_ERROR:
             if watch_dog_instance.is_auto_connect:
                 connection.re_connect_in_delay(

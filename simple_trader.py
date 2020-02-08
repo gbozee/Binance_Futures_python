@@ -3,18 +3,23 @@ import functools
 import logging
 import os
 import typing
+import json
 
 import binance_f
 from binance_f.model import constant, order, orderupdate, position
 from binance_f.subscriptionclient import HelperMixin
+from binance_f.exception.binanceapiexception import BinanceApiException
 from bot import ThreadLogic
 from socket_client import ServerSocketManager
+from websocket import create_connection
 
 logger = logging.getLogger("binance-futures")
 logger.setLevel(level=logging.INFO)
 handler = logging.StreamHandler()
 handler.setFormatter(
-    logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s")
+    logging.Formatter(
+        "%(asctime)s - %(name)s - %(levelname)s - %(pathname)s - %(lineno)d - %(message)s"
+    )
 )
 logger.addHandler(handler)
 
@@ -25,7 +30,7 @@ class BotController:
         api_key,
         api_secret,
         interval=10,
-        url="ws://backup.tuteria.com:5020/config",
+        url="ws://backup.tuteria.com:5020/",
         **kwargs,
     ):
         self.sub_client = binance_f.SubscriptionClient(
@@ -47,7 +52,7 @@ class BotController:
         return TradeHelper(**self.params)
 
     def notify_controller(self, data):
-        ws = create_connection(self.url)
+        ws = create_connection(self.url + "config")
         ws.send(json.dumps(data))
         ws.close()
 
@@ -64,7 +69,7 @@ class BotController:
                         {"action": "trade_completed", "price": event.price}
                     )
                 logger.info(event.__dict__)
-                if event.eventType == "CANCELED":
+                if event.orderStatus == "CANCELED":
                     self.notify_controller({"action": "cancelled"})
 
             elif event.eventType == "listenKeyExpired":
@@ -109,8 +114,9 @@ class BotController:
         self.manager = ServerSocketManager(url=self.url, loop=loop)
         logger.info("Application websocket server started")
         logger.info(f"url is {self.url}")
-        new_server_response = functools.partial(self.on_server_response, server_queue)
-        await self.manager.start_socket("config", new_server_response)
+        await self.manager.start_socket("config", self.on_server_response)
+        # new_server_response = functools.partial(self.on_server_response, server_queue)
+        # await self.manager.start_socket("config", new_server_response)
 
     def start(self):
         try:
@@ -138,8 +144,9 @@ class BotController:
             except Exception:
                 break
 
-    async def on_server_response(self, _queue, data):
+    async def on_server_response(self, data):
         logger.info(data)
+        print(type(data))
         if (type(data)) == dict:
             action = data.get("action")
             try:
@@ -322,8 +329,7 @@ class TradeHelper(HelperMixin):
             condition = 0 < len(open_orders) < 5
             if with_position:
                 condition = 0 < len(open_orders) < 4
-            if condition:
-                await self.cancel_all_orders()
+            await self.cancel_all_orders()
             tasks.append(
                 self.create_take_profit(
                     half_take_profit_price["bull"], "long", self.budget / 2
