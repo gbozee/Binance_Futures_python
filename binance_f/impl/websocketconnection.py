@@ -176,7 +176,6 @@ class WebsocketConnection:
             )
             self.request.error_handler(exception)
         self.logger.error("[Sub][" + str(self.id) + "] " + str(error_message))
-        self.shutdown_gracefully()
 
     def on_failure(self, error):
         print("on_failure")
