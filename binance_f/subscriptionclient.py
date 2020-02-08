@@ -143,7 +143,7 @@ class SubscriptionClient(object):
         connection: WebsocketConnection = self.connections[key]
         try:
             connection.thread_safe(callback=callback)
-        except Exception:
+        except KeyboardInterrupt:
             connection.shutdown_gracefully()
 
     def __create_connection(self, request, running_callback=None):
