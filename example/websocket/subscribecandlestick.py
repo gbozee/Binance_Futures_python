@@ -27,7 +27,7 @@ def callback(data_type: "SubscribeMessageType", event: "any"):
             print("Event time: ", event.eventTime)
             print("Symbol: ", event.symbol)
             print("Data:")
-            print(event.data.__dict__)
+        print(event.data.__dict__)
         # PrintBasic.print_obj(event.data)
         # sub_client.unsubscribe_all()
     else:
